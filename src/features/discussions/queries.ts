@@ -12,6 +12,8 @@ import type {
   SpoilerPolicy,
 } from './types';
 
+import { channelAccessReasonSchema } from './access';
+
 function mapDirectoryRow(row: {
   id: string;
   slug: string;
@@ -26,6 +28,7 @@ function mapDirectoryRow(row: {
   has_consent: boolean;
   access_reason: string;
 }): ClubChannelDirectoryEntry {
+  const parsedReason = channelAccessReasonSchema.safeParse(row.access_reason);
   return {
     id: row.id,
     slug: row.slug,
@@ -38,7 +41,7 @@ function mapDirectoryRow(row: {
     rulesVersion: row.rules_version,
     canRead: row.can_read,
     hasConsent: row.has_consent,
-    accessReason: row.access_reason as ClubChannelDirectoryEntry['accessReason'],
+    accessReason: parsedReason.success ? parsedReason.data : 'unauthenticated',
   };
 }
 

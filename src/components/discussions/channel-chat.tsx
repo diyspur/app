@@ -9,6 +9,7 @@ import { ChannelPreferencesControl } from './channel-preferences';
 import { MessageComposer } from './message-composer';
 import { MessageList } from './message-list';
 import { RevokeSpoilerConsentButton, SpoilerConsentGate } from './spoiler-consent';
+import { paginateEarlierMessages } from '@/features/discussions/message-page';
 
 interface ChannelChatProps {
   workspace: ChannelWorkspaceData;
@@ -190,45 +191,39 @@ export function ChannelChat({
 
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [hasMoreEarlier, setHasMoreEarlier] = useState(workspace.messages.length >= 20);
+  const [earlierError, setEarlierError] = useState<string | null>(null);
 
   const handleLoadEarlier = async () => {
     if (loadingEarlier || messages.length === 0) return;
     setLoadingEarlier(true);
+    setEarlierError(null);
     const oldest = messages[0];
     try {
       const supabase = createBrowserSupabase();
+      const pageSize = 30;
       const { data, error } = await supabase.rpc('list_club_messages', {
-        p_channel_id: activeChannel.id,
-        p_limit: 30,
-        p_cursor: oldest.id,
+        p_channel: activeChannel.id,
+        p_before_created_at: oldest.createdAt,
+        p_before_id: oldest.id,
+        p_limit: pageSize + 1,
       });
 
-      if (!error && Array.isArray(data)) {
-        if (data.length < 30) {
-          setHasMoreEarlier(false);
-        }
-        const olderViews: ClubMessageView[] = (data as Record<string, unknown>[]).map((row) => ({
-          id: String(row.id),
-          channelId: String(row.channel_id),
-          authorId: typeof row.author_id === 'string' ? row.author_id : null,
-          authorName: typeof row.author_name === 'string' && row.author_name ? row.author_name : 'Leitor(a)',
-          authorUsername: typeof row.author_username === 'string' ? row.author_username : null,
-          authorAvatarUrl: typeof row.author_avatar_url === 'string' ? row.author_avatar_url : null,
-          content: String(row.content ?? ''),
-          replyToId: typeof row.reply_to_id === 'string' ? row.reply_to_id : null,
-          videoSec: typeof row.video_sec === 'number' ? row.video_sec : null,
-          version: typeof row.version === 'number' ? row.version : 1,
-          createdAt: String(row.created_at ?? ''),
-          editedAt: typeof row.edited_at === 'string' ? row.edited_at : null,
-        }));
-        setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const uniqueOlder = olderViews.filter((m) => !existingIds.has(m.id));
-          return [...uniqueOlder, ...prev];
-        });
+      if (error) {
+        setEarlierError('Não foi possível carregar as mensagens anteriores. Tente novamente.');
+        return;
+      }
+
+      if (Array.isArray(data)) {
+        const { messages: merged, hasMore } = paginateEarlierMessages(
+          messages,
+          data as Array<Record<string, unknown>>,
+          pageSize,
+        );
+        setHasMoreEarlier(hasMore);
+        setMessages(merged);
       }
     } catch {
-      // non-blocking
+      setEarlierError('Erro de conexão ao carregar mensagens anteriores.');
     } finally {
       setLoadingEarlier(false);
     }
@@ -280,7 +275,8 @@ export function ChannelChat({
       )}
 
       {!activeChannel.canRead ? (
-        activeChannel.accessReason === 'spoiler_consent_required' ? (
+        activeChannel.accessReason === 'consent_required' ||
+        (!activeChannel.hasConsent && activeChannel.spoilerPolicy !== 'none') ? (
           viewerId ? (
             <SpoilerConsentGate
               channelId={activeChannel.id}
@@ -298,7 +294,7 @@ export function ChannelChat({
               </p>
               <div className="empty-actions">
                 <Link
-                  className="btn btn-primary btn-sm"
+                  className="button button-small"
                   href={`/entrar?redirect=${encodeURIComponent(
                     `/clubes/${club.slug}/canais/${activeChannel.slug}`,
                   )}`}
@@ -308,6 +304,26 @@ export function ChannelChat({
               </div>
             </div>
           )
+        ) : activeChannel.accessReason === 'chapter_unread' ? (
+          <div className="member-card">
+            <span className="eyebrow">Proteção de leitura</span>
+            <h2>Conclua a leitura deste capítulo primeiro</h2>
+            <p>
+              Para evitar spoilers antes da hora, complete a leitura deste capítulo antes de acessar
+              a conversa com os outros leitores.
+            </p>
+            <div className="empty-actions">
+              {activeChannel.chapterId ? (
+                <Link className="button button-small" href={`/capitulos/${activeChannel.chapterId}`}>
+                  Abrir capítulo
+                </Link>
+              ) : workspace.book ? (
+                <Link className="button button-small" href={`/livros/${workspace.book.slug}`}>
+                  Voltar para o livro
+                </Link>
+              ) : null}
+            </div>
+          </div>
         ) : activeChannel.accessReason === 'chapter_locked' ? (
           <div className="member-card">
             <span className="eyebrow">Proteção de leitura</span>
@@ -318,7 +334,7 @@ export function ChannelChat({
             </p>
             <div className="empty-actions">
               {workspace.book && (
-                <Link className="btn btn-secondary btn-sm" href={`/livros/${workspace.book.slug}`}>
+                <Link className="button button-small" href={`/livros/${workspace.book.slug}`}>
                   Voltar para o livro
                 </Link>
               )}
@@ -347,6 +363,11 @@ export function ChannelChat({
               >
                 {loadingEarlier ? 'Carregando anteriores…' : '↑ Carregar mensagens anteriores'}
               </button>
+              {earlierError && (
+                <p className="field-error" style={{ marginTop: '6px' }}>
+                  {earlierError}
+                </p>
+              )}
             </div>
           )}
           <MessageList

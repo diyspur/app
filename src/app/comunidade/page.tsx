@@ -17,8 +17,11 @@ function badgeForChannel(channel: ClubChannelDirectoryEntry): {
   tone: 'safe' | 'spoiler' | 'locked';
 } {
   if (!channel.canRead) {
-    if (channel.accessReason === 'spoiler_consent_required') {
+    if (channel.accessReason === 'consent_required') {
       return { text: 'Requer aceite', tone: 'spoiler' };
+    }
+    if (channel.accessReason === 'chapter_unread') {
+      return { text: 'Não lido', tone: 'locked' };
     }
     return { text: 'Bloqueado', tone: 'locked' };
   }

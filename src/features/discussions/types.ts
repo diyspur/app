@@ -1,3 +1,5 @@
+import type { ChannelAccessReason } from './access';
+
 export type ChannelKind = 'no_spoilers' | 'full_spoilers' | 'chapter' | 'topic';
 export type SpoilerPolicy = 'none' | 'whole_book' | 'chapter';
 export type ChannelPreferenceMode = 'muted' | 'mentions' | 'following';
@@ -15,7 +17,7 @@ export interface ClubChannelDirectoryEntry {
   rulesVersion: number;
   canRead: boolean;
   hasConsent: boolean;
-  accessReason: 'ok' | 'not_member' | 'banned' | 'chapter_locked' | 'spoiler_consent_required';
+  accessReason: ChannelAccessReason;
 }
 
 export interface ClubMessageView {

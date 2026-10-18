@@ -3526,6 +3526,70 @@ img, svg {
 }
 
 /* =====================================================================
+   FAQ Grid & Disclosure Cards (.faq-grid, .faq-item)
+   ===================================================================== */
+.faq-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .faq-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.faq-item {
+  background: var(--surface-1);
+  border: 1px solid var(--border-glass, var(--border));
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  transition: border-color var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--ease-spring);
+}
+
+.faq-item:hover {
+  border-color: var(--border-specular, var(--border-strong));
+  box-shadow: var(--shadow-sm);
+}
+
+.faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary::after {
+  content: '↓';
+  font-size: var(--text-body);
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.faq-item[open] summary::after {
+  transform: rotate(180deg);
+  color: var(--brand);
+}
+
+.faq-answer {
+  margin-top: var(--space-3);
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* =====================================================================
    Footer Links & Animated Social Icons
    ===================================================================== */
 .footer-links {

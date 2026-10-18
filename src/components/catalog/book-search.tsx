@@ -21,6 +21,7 @@ export function BookSearch({ initialQuery }: BookSearchProps) {
     if (normalized === initialQuery.trim()) return;
     const timeoutId = window.setTimeout(() => {
       const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+      params.delete('page');
       if (normalized) {
         params.set('q', normalized);
       } else {
@@ -37,6 +38,7 @@ export function BookSearch({ initialQuery }: BookSearchProps) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+    params.delete('page');
     const normalized = query.trim();
     if (normalized) {
       params.set('q', normalized);

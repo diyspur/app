@@ -63,6 +63,9 @@ export const getBooksResult = cache(
 
     const { data, count, error } = await query;
     if (error) {
+      if (error.code === 'PGRST103' && page > 1) {
+        return getBooksResult(search, 1, limit);
+      }
       console.error('Catalog query failed', error.code);
       return queryFailure('unavailable', 'Não foi possível carregar o catálogo de livros no momento.');
     }

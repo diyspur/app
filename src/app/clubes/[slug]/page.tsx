@@ -182,7 +182,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
         </div>
       )}
 
-      <div className="member-grid">
+      <div className="club-overview-layout">
         <section aria-labelledby="club-season-heading" className="member-card">
           <div className="section-head">
             <div>

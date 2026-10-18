@@ -81,11 +81,11 @@ export default async function NewClubMeetingPage({ params }: { params: Params })
 
   if (!targetBookId) {
     return (
-      <main id="main-content" className="shell-container page-stack">
+      <section className="container page-stack">
         <div className="callout callout-warning">
           <p>Não há nenhum livro cadastrado na plataforma para associar ao encontro.</p>
         </div>
-      </main>
+      </section>
     );
   }
 
@@ -105,21 +105,21 @@ export default async function NewClubMeetingPage({ params }: { params: Params })
   }));
 
   return (
-    <main id="main-content" className="shell-container page-stack">
-      <nav aria-label="Navegação estrutural" className="breadcrumbs-nav mb-4">
-        <Link href={buildClubHref(club.slug)} className="text-sm text-muted-foreground hover:underline">
+    <section className="container page-stack" aria-labelledby="new-meeting-title">
+      <nav aria-label="Navegação estrutural" className="breadcrumbs-nav" style={{ marginBottom: '1rem' }}>
+        <Link href={buildClubHref(club.slug)} className="text-link">
           &larr; Voltar para {club.name}
         </Link>
       </nav>
 
-      <header className="page-header mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Agendar Novo Encontro</h1>
-        <p className="text-muted-foreground mt-1">
+      <header className="page-intro" style={{ marginBottom: '1.5rem' }}>
+        <h1 id="new-meeting-title">Agendar Novo Encontro</h1>
+        <p>
           Crie um encontro virtual ou presencial para os membros do clube <strong>{club.name}</strong>.
         </p>
       </header>
 
-      <div className="card p-6 max-w-2xl">
+      <section className="member-card form-card">
         <MeetingForm
           mode="create"
           clubId={club.id}
@@ -128,7 +128,7 @@ export default async function NewClubMeetingPage({ params }: { params: Params })
           chapters={chapters}
           onSuccessRedirectHref={buildClubHref(club.slug)}
         />
-      </div>
-    </main>
+      </section>
+    </section>
   );
 }

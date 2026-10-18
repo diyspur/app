@@ -35,7 +35,7 @@ export default async function GoalsPage() {
         </div>
       )}
 
-      <div className="member-grid">
+      <div className="goal-layout">
         <section aria-labelledby="goals-config-heading" className="member-card">
           <div className="section-head">
             <div>

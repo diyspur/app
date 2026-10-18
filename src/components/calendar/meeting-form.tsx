@@ -172,7 +172,7 @@ export function MeetingForm({
         <input
           id="meeting-title"
           type="text"
-          className="input-field"
+          className="field"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Ex: Discussão dos capítulos 1 a 3"
@@ -189,7 +189,7 @@ export function MeetingForm({
           </label>
           <select
             id="meeting-kind"
-            className="input-field"
+            className="field"
             value={kind}
             onChange={(e) => setKind(e.target.value as 'online' | 'in_person' | 'hybrid')}
             disabled={isPending}
@@ -206,7 +206,7 @@ export function MeetingForm({
           </label>
           <select
             id="meeting-spoiler"
-            className="input-field"
+            className="field"
             value={spoilerPolicy}
             onChange={(e) => setSpoilerPolicy(e.target.value as 'none' | 'chapter' | 'whole_book')}
             disabled={isPending}
@@ -226,7 +226,7 @@ export function MeetingForm({
           <input
             id="meeting-date"
             type="datetime-local"
-            className="input-field"
+            className="field"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
             required
@@ -241,7 +241,7 @@ export function MeetingForm({
           <input
             id="meeting-duration"
             type="number"
-            className="input-field"
+            className="field"
             value={durationMin}
             onChange={(e) => setDurationMin(Number(e.target.value))}
             min={15}
@@ -259,7 +259,7 @@ export function MeetingForm({
           </label>
           <select
             id="meeting-chapter"
-            className="input-field"
+            className="field"
             value={chapterId}
             onChange={(e) => setChapterId(e.target.value)}
             disabled={isPending}
@@ -282,7 +282,7 @@ export function MeetingForm({
           <input
             id="meeting-url"
             type="url"
-            className="input-field"
+            className="field"
             value={meetingUrl}
             onChange={(e) => setMeetingUrl(e.target.value)}
             placeholder="https://meet.google.com/..."
@@ -301,7 +301,7 @@ export function MeetingForm({
           <input
             id="meeting-location"
             type="text"
-            className="input-field"
+            className="field"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="Ex: Biblioteca Central - Sala de Estudos 2"
@@ -317,7 +317,7 @@ export function MeetingForm({
         </label>
         <textarea
           id="meeting-agenda"
-          className="input-field min-h-24"
+          className="field"
           value={agenda}
           onChange={(e) => setAgenda(e.target.value)}
           placeholder="Tópicos de discussão, perguntas norteadoras..."
@@ -339,21 +339,27 @@ export function MeetingForm({
         </div>
       ) : null}
 
-      <div className="meeting-form-actions">
-        <button
-          type="button"
-          className="button button-outline"
-          disabled={isPending}
-          onClick={() => router.back()}
-        >
-          Cancelar
-        </button>
-        <button type="submit" className="button button-primary" disabled={isPending}>
+      <div className="form-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1.25rem' }}>
+        <button type="submit" className="button button-small" disabled={isPending}>
           {isPending
             ? 'Salvando...'
             : mode === 'create'
               ? 'Agendar encontro'
               : 'Salvar alterações'}
+        </button>
+        <button
+          type="button"
+          className="button button-small button-quiet"
+          disabled={isPending}
+          onClick={() => {
+            if (onSuccessRedirectHref) {
+              router.push(onSuccessRedirectHref);
+            } else {
+              router.back();
+            }
+          }}
+        >
+          Cancelar
         </button>
       </div>
     </form>

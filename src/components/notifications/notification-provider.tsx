@@ -163,9 +163,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               const isNowRead = row.read_at !== null;
 
               if (wasUnread && isNowRead) {
-                setUnreadCount((c) => Math.max(0, c - 1));
+                queueMicrotask(() => setUnreadCount((c) => Math.max(0, c - 1)));
               } else if (!wasUnread && !isNowRead) {
-                setUnreadCount((c) => c + 1);
+                queueMicrotask(() => setUnreadCount((c) => c + 1));
               }
 
               return prev.map((item) => (item.id === row.id ? { ...item, read_at: row.read_at } : item));

@@ -20,6 +20,9 @@ export type NotificationsPageData = {
   notifications: NotificationRow[];
   invitations: { id: string; club_id: string; expires_at: string; created_at: string }[];
   preferences: NotificationPreferencesData;
+  total: number;
+  page: number;
+  totalPages: number;
   error: boolean;
 };
 
@@ -30,7 +33,7 @@ const DEFAULT_PREFS: NotificationPreferencesData = {
   channelActivity: false,
 };
 
-export async function getNotificationsPageData(): Promise<NotificationsPageData> {
+export async function getNotificationsPageData(page: number = 1, limit: number = 20): Promise<NotificationsPageData> {
   try {
     const client = await createServerSupabase();
     const { data: claimsData, error: claimsError } = await client.auth.getClaims();
@@ -42,18 +45,24 @@ export async function getNotificationsPageData(): Promise<NotificationsPageData>
         notifications: [],
         invitations: [],
         preferences: DEFAULT_PREFS,
+        total: 0,
+        page: 1,
+        totalPages: 1,
         error: Boolean(claimsError),
       };
     }
 
-    const [{ data, error }, { data: invitations }, { data: prefRow }] = await Promise.all([
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * limit;
+
+    const [notifResult, { data: invitations }, { data: prefRow }] = await Promise.all([
       client
         .from('notifications')
-        .select('id,kind,payload,created_at,read_at')
+        .select('id,kind,payload,created_at,read_at', { count: 'exact' })
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .limit(50),
+        .range(offset, offset + limit - 1),
       client
         .from('user_club_invitations')
         .select('id,club_id,expires_at,created_at')
@@ -70,9 +79,16 @@ export async function getNotificationsPageData(): Promise<NotificationsPageData>
         .maybeSingle(),
     ]);
 
+    if (notifResult.error?.code === 'PGRST103' && safePage > 1) {
+      return getNotificationsPageData(1, limit);
+    }
+
+    const total = notifResult.count ?? (notifResult.data?.length ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
     return {
       userId,
-      notifications: (data ?? []) as NotificationRow[],
+      notifications: (notifResult.data ?? []) as NotificationRow[],
       invitations: invitations ?? [],
       preferences: prefRow
         ? {
@@ -82,7 +98,10 @@ export async function getNotificationsPageData(): Promise<NotificationsPageData>
             channelActivity: prefRow.channel_activity,
           }
         : DEFAULT_PREFS,
-      error: Boolean(error),
+      total,
+      page: safePage,
+      totalPages,
+      error: Boolean(notifResult.error),
     };
   } catch {
     return {
@@ -90,6 +109,9 @@ export async function getNotificationsPageData(): Promise<NotificationsPageData>
       notifications: [],
       invitations: [],
       preferences: DEFAULT_PREFS,
+      total: 0,
+      page: 1,
+      totalPages: 1,
       error: true,
     };
   }

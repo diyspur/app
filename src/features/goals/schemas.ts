@@ -5,9 +5,9 @@ export const goalSchema = z
     id: z.string().uuid().optional(),
     title: z.string().trim().min(1).max(120).optional(),
     year: z.coerce.number().int().min(2020).max(2050),
-    targetBooks: z.coerce.number().int().positive().max(1000).nullable().optional(),
-    targetPages: z.coerce.number().int().positive().max(1000000).nullable().optional(),
-    targetMinutes: z.coerce.number().int().positive().max(1000000).nullable().optional(),
+    targetBooks: z.coerce.number().int().positive().max(365, 'Máximo de 365 livros por ano.').nullable().optional(),
+    targetPages: z.coerce.number().int().positive().max(50000, 'Máximo de 50.000 páginas por ano.').nullable().optional(),
+    targetMinutes: z.coerce.number().int().positive().max(500000, 'Máximo de 500.000 minutos por ano.').nullable().optional(),
     version: z.coerce.number().int().nonnegative().optional(),
   })
   .strict()

@@ -12,9 +12,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function NotificationsPage() {
-  const { userId, notifications, invitations, preferences, error } =
-    await getNotificationsPageData();
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const page = Math.max(1, parseInt(resolvedParams.page || '1', 10) || 1);
+
+  const { userId, notifications, invitations, preferences, totalPages, total, error } =
+    await getNotificationsPageData(page, 20);
 
   return (
     <section className="container">
@@ -40,7 +47,7 @@ export default async function NotificationsPage() {
           <div className="section-head">
             <div>
               <span className="eyebrow">Atualizações recentes</span>
-              <h2 id="notifications-heading">Suas notificações</h2>
+              <h2 id="notifications-heading">Suas notificações {total > 0 ? `(${total})` : ''}</h2>
             </div>
           </div>
           <NotificationList
@@ -48,6 +55,32 @@ export default async function NotificationsPage() {
             preferences={preferences}
             error={error}
           />
+
+          {totalPages > 1 && (
+            <nav className="pagination-nav" aria-label="Paginação de notificações" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+              {page > 1 ? (
+                <Link className="button button-quiet button-small" href={`/notificacoes?page=${page - 1}`}>
+                  ← Anterior
+                </Link>
+              ) : (
+                <span className="button button-quiet button-small disabled" aria-disabled="true">
+                  ← Anterior
+                </span>
+              )}
+              <span className="field-hint" style={{ margin: 0 }}>
+                Página {page} de {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link className="button button-quiet button-small" href={`/notificacoes?page=${page + 1}`}>
+                  Próxima →
+                </Link>
+              ) : (
+                <span className="button button-quiet button-small disabled" aria-disabled="true">
+                  Próxima →
+                </span>
+              )}
+            </nav>
+          )}
         </section>
       )}
     </section>

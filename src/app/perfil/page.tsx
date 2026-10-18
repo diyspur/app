@@ -8,6 +8,7 @@ import {
   type ReadingHistoryItem,
 } from '@/features/profile/queries';
 import { memberLinks } from '@/lib/member-navigation';
+import { getShelfStatusPresentation } from '@/features/reading/presentation';
 
 export const metadata: Metadata = { title: 'Meu espaço', robots: { index: false, follow: false } };
 
@@ -23,13 +24,7 @@ function formatMinutes(value: number): string {
 }
 
 function statusLabel(status: ReadingHistoryItem['status']): string {
-  const labels: Record<ReadingHistoryItem['status'], string> = {
-    want_to_read: 'Quero ler',
-    reading: 'Em andamento',
-    read: 'Concluído',
-    dnf: 'Pausado',
-  };
-  return labels[status];
+  return getShelfStatusPresentation(status).label;
 }
 
 function MetricGrid({ metrics }: { metrics: Array<{ label: string; value: string | number }> }) {
@@ -118,7 +113,13 @@ function OverviewContent({ data }: { data: ProfileOverviewData }) {
   return (
     <section className="member-card">
       <h2>Bem-vindo(a) ao seu clube</h2>
-      <p>{data.profile?.bio ?? 'Quando sua leitura começar, este espaço vai acompanhar seu caminho e suas descobertas.'}</p>
+      <p>
+        {data.profile?.bio
+          ? data.profile.bio
+          : hasActivity
+            ? 'Leitor ativo no DIYSPUR.'
+            : 'Quando sua leitura começar, este espaço vai acompanhar seu caminho e suas descobertas.'}
+      </p>
       {data.profile?.level && <p>Nível: {data.profile.level}</p>}
 
       {!hasActivity && (

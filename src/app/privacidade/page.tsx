@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { supportEmail } from '@/lib/site-contact';
+import { PrivacyConsentManager } from '@/components/analytics/privacy-consent-manager';
 
 export const metadata: Metadata = {
   title: 'Privacidade e Proteção de Dados',
@@ -33,22 +34,45 @@ export default function PrivacyPage() {
       <h2>3. Telemetria e Analytics opcional</h2>
       <p>
         Para entender padrões de navegação e melhorar a estabilidade da plataforma, utilizamos métricas técnicas
-        (Sentry para diagnóstico de falhas sem coleta de dados pessoais) e telemetria agregada de produto (PostHog).
+        (Sentry para diagnóstico de falhas sem coleta de dados pessoais) e ferramentas de telemetria e usabilidade
+        (PostHog, Google Analytics 4, Microsoft Clarity e Grafana Faro).
       </p>
       <p>
-        <strong>O analytics de produto só é ativado se você conceder consentimento explícito.</strong>
-        {' '}A qualquer momento você pode alterar ou revogar sua escolha pelo suporte do clube ou nas configurações da conta.
-        A recusa ou revogação não impede nem limita o uso das funcionalidades do clube.
+        <strong>O analytics só é ativado se você conceder consentimento explícito (política estrita por padrão / fail-closed).</strong>
+        {' '}A ausência de decisão é tratada estritamente como bloqueio, nunca como aceite.
+        A qualquer momento você pode consultar seu status atual, alterar sua escolha ou revogar o consentimento
+        utilizando o painel interativo abaixo:
       </p>
 
-      <h2>4. Seus direitos sob a LGPD</h2>
+      <PrivacyConsentManager />
+
+      <h2>4. Ferramentas de Telemetria e Finalidades</h2>
+      <ul>
+        <li>
+          <strong>PostHog &amp; Google Analytics 4 (GA4):</strong> Métricas agregadas de produto e navegação para identificar livros populares e aperfeiçoar fluxos de leitura.
+        </li>
+        <li>
+          <strong>Microsoft Clarity:</strong> Mapas de calor e comportamento de tela com mascaramento completo de dados sensíveis para testes de usabilidade.
+        </li>
+        <li>
+          <strong>Grafana Faro:</strong> Diagnóstico técnico de desempenho (Core Web Vitals), tempo de carregamento e estabilidade da interface.
+        </li>
+        <li>
+          <strong>Sentry:</strong> Registro essencial de exceções técnicas e erros de runtime em produção.
+        </li>
+      </ul>
+      <p>
+        A recusa ou revogação de consentimento não impede nem limita o uso das funcionalidades do clube.
+      </p>
+
+      <h2>5. Seus direitos sob a LGPD</h2>
       <p>
         Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), você pode solicitar a
         confirmação da existência de tratamento, o acesso aos seus dados, a correção de dados incompletos ou
         a exclusão de sua conta a qualquer momento pelo suporte do clube.
       </p>
 
-      <h2>5. Contato</h2>
+      <h2>6. Contato</h2>
       <p>
         Para dúvidas sobre privacidade ou exercer seus direitos de titular de dados, entre em contato pelo
         email <code>{supportEmail}</code>.

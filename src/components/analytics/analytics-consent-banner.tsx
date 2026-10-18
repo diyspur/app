@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { readAnalyticsConsent, saveAnalyticsConsent, type AnalyticsConsent } from '@/lib/analytics/consent';
+import Link from 'next/link';
+import {
+  readAnalyticsConsent,
+  saveAnalyticsConsent,
+  onAnalyticsConsentChange,
+  type AnalyticsConsent,
+} from '@/lib/analytics/consent';
 
 export function AnalyticsConsentBanner() {
   const [choice, setChoice] = useState<AnalyticsConsent | null>(null);
@@ -11,6 +17,14 @@ export function AnalyticsConsentBanner() {
     const current = readAnalyticsConsent();
     setChoice(current);
     setOpen(current === null);
+
+    const unsubscribe = onAnalyticsConsentChange(() => {
+      const updated = readAnalyticsConsent();
+      setChoice(updated);
+      setOpen(updated === null);
+    });
+
+    return unsubscribe;
   }, []);
 
   function choose(value: AnalyticsConsent) {
@@ -19,35 +33,69 @@ export function AnalyticsConsentBanner() {
     setOpen(false);
   }
 
+  if (!open) {
+    return null;
+  }
+
   return (
-    <>
-      {open && (
-        <aside
-          role="dialog"
-          aria-modal="false"
-          aria-labelledby="analytics-consent-title"
-          className="analytics-consent"
+    <aside
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="analytics-consent-title"
+      aria-describedby="analytics-consent-desc"
+      className="analytics-consent"
+    >
+      <h2 id="analytics-consent-title">Privacidade e preferências de telemetria</h2>
+      <p id="analytics-consent-desc">
+        Utilizamos ferramentas de análise e desempenho para entender o uso da plataforma, prevenir falhas técnicas
+        e aprimorar sua experiência de leitura:
+      </p>
+
+      <ul className="analytics-consent-tools">
+        <li>
+          <strong>PostHog &amp; Google Analytics 4 (GA4):</strong> Métricas de navegação e engajamento no catálogo e clubes.
+        </li>
+        <li>
+          <strong>Microsoft Clarity:</strong> Mapas de calor e usabilidade com anonimização total de dados sensíveis.
+        </li>
+        <li>
+          <strong>Grafana Faro:</strong> Diagnóstico técnico de desempenho (Core Web Vitals) e estabilidade da interface.
+        </li>
+      </ul>
+
+      <p className="analytics-consent-guarantee">
+        Nenhum dado é coletado sem o seu consentimento prévio (política de privacidade estrita por padrão). A recusa não
+        limita o acesso ao clube.{' '}
+        <Link href="/privacidade" className="analytics-consent-privacy-link">
+          Gerenciar na Política de Privacidade
+        </Link>
+      </p>
+
+      <div className="analytics-consent-actions">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm analytics-consent-btn analytics-consent-btn-reject"
+          onClick={() => choose('denied')}
         >
-          <h2 id="analytics-consent-title">Ajude a melhorar o DIYSPUR</h2>
-          <p>
-            Analytics opcional ajuda a entender uso e falhas. A escolha pode ser alterada depois.
-            Recusar não impede o uso do clube.
-          </p>
-          <div className="analytics-consent-actions">
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => choose('granted')}>
-              Aceitar analytics
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => choose('denied')}>
-              Recusar
-            </button>
-            {choice !== null && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>
-                Cancelar
-              </button>
-            )}
-          </div>
-        </aside>
-      )}
-    </>
+          Recusar
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm analytics-consent-btn analytics-consent-btn-accept"
+          onClick={() => choose('granted')}
+        >
+          Aceitar
+        </button>
+        {choice !== null && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpen(false)}
+          >
+            Fechar
+          </button>
+        )}
+      </div>
+    </aside>
   );
 }

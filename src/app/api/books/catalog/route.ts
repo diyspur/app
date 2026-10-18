@@ -1,52 +1,47 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getBooksResult } from '@/features/catalog/queries';
 
-const PAGE_SIZE = 24;
 const MAX_QUERY_LENGTH = 120;
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest | Request) {
   try {
-    const params = new URL(request.url).searchParams;
-    const rawPage = params.get('page') ?? '2';
-    const page = Number(rawPage);
-    const query = (params.get('q') ?? '').trim();
+    const { searchParams } = new URL(request.url);
+    const rawPage = parseInt(searchParams.get('page') || '1', 10);
+    const page = Number.isNaN(rawPage) ? 1 : Math.max(1, rawPage);
+    const rawLimit = parseInt(searchParams.get('limit') || '24', 10);
+    const limit = Number.isNaN(rawLimit) ? 24 : Math.min(48, Math.max(1, rawLimit));
+    const rawQ = searchParams.get('q') || '';
+    const q = rawQ.trim().slice(0, MAX_QUERY_LENGTH);
 
-    if (!Number.isSafeInteger(page) || page < 1 || page > 10_000) {
-      return NextResponse.json({ error: 'invalid_page' }, { status: 400 });
-    }
-
-    if (query.length > MAX_QUERY_LENGTH) {
-      return NextResponse.json({ error: 'query_too_long' }, { status: 400 });
-    }
-
-    const result = await getBooksResult(query, page, PAGE_SIZE);
+    const result = await getBooksResult(q, page, limit);
     if (!result.ok) {
       return NextResponse.json(
-        { error: 'catalog_unavailable' },
-        { status: 503, headers: { 'Cache-Control': 'no-store' } },
+        { error: result.message ?? 'Falha ao carregar catálogo' },
+        { status: 500, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
-    const { books, total, isPersonalized } = result.data;
+    const { books, total } = result.data;
+    const hasMore = books.length === limit && page * limit < total;
+
     return NextResponse.json(
       {
-        books,
-        total,
-        page,
-        hasMore: books.length === PAGE_SIZE && page * PAGE_SIZE < total,
-        isPersonalized: Boolean(isPersonalized),
+        ...result.data,
+        hasMore,
       },
       {
         status: 200,
-        headers: { 'Cache-Control': 'private, no-store' },
+        headers: {
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+        },
       },
     );
   } catch {
     return NextResponse.json(
-      { error: 'catalog_unavailable' },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      { error: 'Falha ao carregar catálogo' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

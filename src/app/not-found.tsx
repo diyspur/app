@@ -1,6 +1,17 @@
 import Link from 'next/link';
+import { logInfo } from '@/lib/observability/logger';
 
 export default function NotFound() {
+  try {
+    logInfo('page_not_found', {
+      route: 'not_found',
+      status_code: 404,
+      boundary: 'not-found',
+    });
+  } catch {
+    // Fail-safe
+  }
+
   return (
     <section className="container section">
       <div className="empty-state">

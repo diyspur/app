@@ -3,6 +3,8 @@
 import * as Sentry from '@sentry/nextjs';
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { logError } from '@/lib/observability/logger';
+import { pushFaroError } from '@/lib/telemetry/faro';
 
 export default function ErrorPage({
   error,
@@ -12,10 +14,47 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error, {
-      tags: { boundary: 'app-route' },
-      extra: { nextDigest: error.digest },
-    });
+    const route = typeof window !== 'undefined' ? window.location.pathname : undefined;
+
+    // 1. Captura de erro com metadados detalhados no Sentry
+    try {
+      Sentry.captureException(error, {
+        tags: {
+          boundary: 'app-route',
+          route: route ? String(route).slice(0, 50) : undefined,
+        },
+        extra: {
+          nextDigest: error.digest,
+          route,
+        },
+      });
+    } catch {
+      // Fail-safe
+    }
+
+    // 2. Envio de erro para o Grafana Faro
+    try {
+      pushFaroError(error, {
+        boundary: 'app-route',
+        route,
+        nextDigest: error.digest,
+      });
+    } catch {
+      // Fail-safe
+    }
+
+    // 3. Registro de log estruturado no console com redaction de PII
+    try {
+      logError('app_route_error', {
+        error,
+        route,
+        error_code: error.digest,
+        boundary: 'app-route',
+        nextDigest: error.digest,
+      });
+    } catch {
+      // Fail-safe
+    }
   }, [error]);
 
   return (
@@ -27,7 +66,12 @@ export default function ErrorPage({
         </h1>
         <p>Não foi possível carregar esta página agora. Tente novamente em instantes.</p>
         <div className="empty-actions">
-          <button className="button" onClick={() => reset()}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => reset()}
+            aria-label="Tentar carregar esta página novamente"
+          >
             Tentar novamente
           </button>
           <Link className="button button-quiet" href="mailto:suporte@diyspur.com">

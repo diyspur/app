@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Book } from '@/features/catalog/queries';
+import type { BookReadingStatus } from '@/features/reading/schemas';
 import { BookCard } from '@/components/book-card';
 import { getStoredInteractions } from '@/features/recommendations/browser-storage';
-import { rankCatalogBooks } from '@/features/recommendations/tensorflow-recommender';
 
 interface PersonalizedCatalogProps {
   initialBooks: Book[];
@@ -40,19 +40,50 @@ export function PersonalizedCatalog({
     const interactions = getStoredInteractions();
     if (!interactions.length) return;
 
-    try {
-      const ranked = rankCatalogBooks(initialBooks, null, { interactions });
-      if (ranked.some((book) => book.isRecommended)) {
-        setBooks((current) => {
-          // Re-rank only the server-provided batch; never discard pages already appended.
-          const appended = current.filter((book) => !initialBooks.some((item) => item.id === book.id));
-          return [...ranked, ...appended];
+    let isMounted = true;
+
+    async function reRankWithInteractions() {
+      try {
+        // Extrair mapa de leituras do servidor
+        const serverReadings = new Map<string, BookReadingStatus>();
+        for (const b of initialBooks) {
+          if (b.readingStatus) {
+            serverReadings.set(b.id, b.readingStatus as BookReadingStatus);
+          }
+        }
+
+        // Import dinâmico sob demanda (utiliza motor nativo ultraleve sem baixar TensorFlow.js)
+        const { rankCatalog } = await import(
+          '@/features/recommendations/recommender-engine'
+        );
+        const ranked = rankCatalog(initialBooks, serverReadings, {
+          interactions,
         });
-        setHasClientBoost(true);
+
+        if (!isMounted) return;
+
+        const hasRecommendations = ranked.some((b) => b.isRecommended);
+        if (hasRecommendations) {
+          setBooks((current) => {
+            // Re-rank only the server-provided batch; never discard pages already appended.
+            const appended = current.filter(
+              (book) => !initialBooks.some((item) => item.id === book.id),
+            );
+            return [...ranked, ...appended];
+          });
+          setHasClientBoost(true);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('[PersonalizedCatalog] Fallback to initial order:', err);
       }
-    } catch (error) {
-      console.warn('[PersonalizedCatalog] Fallback to initial order:', error);
     }
+
+    void reRankWithInteractions();
+
+    return () => {
+      isMounted = false;
+    };
   }, [initialBooks]);
 
   const loadMore = useCallback(async () => {

@@ -3793,7 +3793,39 @@ img, svg {
   font-size: var(--text-body-sm);
   color: var(--text-secondary);
   line-height: var(--line-relaxed);
+  margin-bottom: var(--space-3);
+}
+
+.analytics-consent-tools {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+}
+
+.analytics-consent-tools li {
+  line-height: var(--line-relaxed);
+}
+
+.analytics-consent-tools strong {
+  color: var(--text-primary);
+}
+
+.analytics-consent-guarantee {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: var(--line-relaxed);
   margin-bottom: var(--space-4);
+}
+
+.analytics-consent-privacy-link {
+  color: var(--brand);
+  text-decoration: underline;
+  font-weight: var(--weight-medium);
 }
 
 .analytics-consent-actions {
@@ -3803,8 +3835,105 @@ img, svg {
   align-items: center;
 }
 
-.analytics-consent-actions button {
+.analytics-consent-actions .analytics-consent-btn {
   min-height: 44px;
+  flex: 1 1 140px;
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  justify-content: center;
+}
+
+.analytics-consent-actions .analytics-consent-btn-accept:hover {
+  border-color: var(--brand);
+}
+
+.analytics-consent-actions .analytics-consent-btn-reject:hover {
+  border-color: var(--border-strong);
+}
+
+/* Privacy Page: Consent Management Widget */
+.privacy-consent-manager {
+  margin: var(--space-6) 0;
+}
+
+.privacy-consent-status-card {
+  padding: var(--space-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.privacy-consent-status-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.privacy-consent-label {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+
+.privacy-consent-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+}
+
+.privacy-consent-badge.status-granted {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.privacy-consent-badge.status-denied {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.privacy-consent-badge.status-default {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.privacy-consent-description {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: var(--line-relaxed);
+  margin: 0;
+}
+
+.privacy-consent-alert {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--brand);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  border: 1px solid var(--border);
+}
+
+.privacy-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.privacy-consent-actions .btn {
+  min-height: 40px;
 }
 
 

@@ -8,6 +8,7 @@ import {
   buildClubHref,
 } from '@/lib/community-navigation';
 import { createServerSupabase } from '@/lib/supabase/clients';
+import { withTelemetryAction } from '@/lib/observability/action-wrapper';
 import {
   DEFAULT_CHANNEL_SLUGS,
   type DiscussionEntryResult,
@@ -141,71 +142,82 @@ export async function sendClubMessageAction(input: {
   message?: string;
   sent?: ClubMessageView;
 }> {
-  if (isReadOnlyPreview()) {
-    return { ok: false, message: READ_ONLY_PREVIEW_MESSAGE };
-  }
-  const parsed = sendClubMessageSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Mensagem inválida.' };
-  }
-
-  try {
-    const supabase = await createServerSupabase();
-    const { data, error } = await supabase.rpc('send_club_message', {
-      p_channel: parsed.data.channelId,
-      p_client_message_id: parsed.data.clientMessageId,
-      p_content: parsed.data.content,
-      p_reply_to: parsed.data.replyToId ?? null,
-      p_video_sec: parsed.data.videoSec ?? null,
-    });
-
-    if (error || !data?.[0]) {
-      const mapped = mapDatabaseError(error?.code, error?.message);
-      return { ok: false, message: mapped.message };
-    }
-
-    const row = data[0];
-    let authorName = 'Você';
-    let authorUsername: string | null = null;
-    let authorAvatarUrl: string | null = null;
-
-    if (row.author_id) {
-      const { data: profile } = await supabase
-        .from('v_profiles_public')
-        .select('display_name,username,avatar_url')
-        .eq('id', row.author_id)
-        .maybeSingle();
-      if (profile) {
-        authorName = profile.display_name ?? profile.username ?? 'Você';
-        authorUsername = profile.username;
-        authorAvatarUrl = profile.avatar_url;
+  return withTelemetryAction(
+    'clubs.postClubMessage',
+    async (inp: typeof input) => {
+      if (isReadOnlyPreview()) {
+        return { ok: false, message: READ_ONLY_PREVIEW_MESSAGE };
       }
+      const parsed = sendClubMessageSchema.safeParse(inp);
+      if (!parsed.success) {
+        return { ok: false, message: parsed.error.issues[0]?.message ?? 'Mensagem inválida.' };
+      }
+
+      try {
+        const supabase = await createServerSupabase();
+        const { data, error } = await supabase.rpc('send_club_message', {
+          p_channel: parsed.data.channelId,
+          p_client_message_id: parsed.data.clientMessageId,
+          p_content: parsed.data.content,
+          p_reply_to: parsed.data.replyToId ?? null,
+          p_video_sec: parsed.data.videoSec ?? null,
+        });
+
+        if (error || !data?.[0]) {
+          const mapped = mapDatabaseError(error?.code, error?.message);
+          return { ok: false, message: mapped.message };
+        }
+
+        const row = data[0];
+        let authorName = 'Você';
+        let authorUsername: string | null = null;
+        let authorAvatarUrl: string | null = null;
+
+        if (row.author_id) {
+          const { data: profile } = await supabase
+            .from('v_profiles_public')
+            .select('display_name,username,avatar_url')
+            .eq('id', row.author_id)
+            .maybeSingle();
+          if (profile) {
+            authorName = profile.display_name ?? profile.username ?? 'Você';
+            authorUsername = profile.username;
+            authorAvatarUrl = profile.avatar_url;
+          }
+        }
+
+        revalidatePath(
+          buildClubChannelHref({ clubSlug: row.club_slug, channelSlug: row.channel_slug }),
+        );
+
+        return {
+          ok: true,
+          sent: {
+            id: row.id,
+            channelId: row.channel_id,
+            authorId: row.author_id,
+            authorName,
+            authorUsername,
+            authorAvatarUrl,
+            content: row.content,
+            replyToId: row.reply_to_id,
+            videoSec: row.video_sec,
+            version: row.version,
+            createdAt: row.created_at,
+            editedAt: null,
+          },
+        };
+      } catch {
+        return { ok: false, message: 'Não foi possível enviar sua mensagem agora.' };
+      }
+    },
+    {
+      resourceExtractor: (inp) => ({
+        channelId: inp.channelId,
+        clientMessageId: inp.clientMessageId,
+      }),
     }
-
-    revalidatePath(
-      buildClubChannelHref({ clubSlug: row.club_slug, channelSlug: row.channel_slug }),
-    );
-
-    return {
-      ok: true,
-      sent: {
-        id: row.id,
-        channelId: row.channel_id,
-        authorId: row.author_id,
-        authorName,
-        authorUsername,
-        authorAvatarUrl,
-        content: row.content,
-        replyToId: row.reply_to_id,
-        videoSec: row.video_sec,
-        version: row.version,
-        createdAt: row.created_at,
-        editedAt: null,
-      },
-    };
-  } catch {
-    return { ok: false, message: 'Não foi possível enviar sua mensagem agora.' };
-  }
+  )(input);
 }
 
 export async function editClubMessageAction(input: {

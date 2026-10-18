@@ -26,6 +26,8 @@ export interface LogContext {
   duration_ms?: number;
   status_code?: number;
   error_code?: string;
+  action?: string;
+  boundary?: string;
   error?: unknown;
   [key: string]: unknown;
 }
@@ -67,6 +69,8 @@ function fanOutToSentry(event: string, context?: LogContext): void {
     if (context?.route) tags.route = String(context.route).slice(0, 50);
     if (context?.error_code) tags.error_code = String(context.error_code);
     if (context?.request_id) tags.request_id = String(context.request_id);
+    if (context?.action) tags.action = String(context.action).slice(0, 50);
+    if (context?.boundary) tags.boundary = String(context.boundary).slice(0, 50);
 
     if (context?.error) {
       if (typeof Sentry.captureException === 'function') {

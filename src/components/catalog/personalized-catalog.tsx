@@ -18,8 +18,6 @@ type CatalogApiResponse = {
   hasMore?: boolean;
 };
 
-const PAGE_SIZE = 24;
-
 export function PersonalizedCatalog({
   initialBooks,
   initialQuery = '',

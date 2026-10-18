@@ -9,6 +9,17 @@ export interface UserReadingRecord {
 export interface FeatureVocabulary {
   tags: string[];
   authorIds: string[];
+  tagIndexMap?: Map<string, number>;
+  authorIndexMap?: Map<string, number>;
+  tagIdfMap?: Map<string, number>;
+}
+
+export interface IndexedVocabulary extends FeatureVocabulary {
+  tags: string[];
+  authorIds: string[];
+  tagIndexMap: Map<string, number>;
+  authorIndexMap: Map<string, number>;
+  tagIdfMap?: Map<string, number>;
 }
 
 export interface RecommendationScore {

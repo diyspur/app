@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as tf from '@tensorflow/tfjs';
 import type { Book } from '@/features/catalog/queries';
 import type { BookReadingStatus } from '@/features/reading/schemas';
+import type {
+  FeatureVocabulary,
+  IndexedVocabulary,
+} from '@/features/recommendations/types';
 import {
   buildFeatureVocabulary,
   vectorizeBook,
@@ -87,6 +91,80 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       const vector = vectorizeBook(emptyBook, vocab);
       expect(vector.length).toBe(vocab.tags.length + vocab.authorIds.length);
       expect(vector.some((v) => Number.isNaN(v))).toBe(false);
+    });
+
+    it('populates tagIndexMap and authorIndexMap with exact O(1) indices matching arrays', () => {
+      const vocab = buildFeatureVocabulary(sampleCatalog);
+
+      expect(vocab.tagIndexMap).toBeInstanceOf(Map);
+      expect(vocab.authorIndexMap).toBeInstanceOf(Map);
+      expect(vocab.tagIndexMap.size).toBe(vocab.tags.length);
+      expect(vocab.authorIndexMap.size).toBe(vocab.authorIds.length);
+
+      vocab.tags.forEach((tag, idx) => {
+        expect(vocab.tagIndexMap.get(tag)).toBe(idx);
+      });
+
+      vocab.authorIds.forEach((authorId, idx) => {
+        expect(vocab.authorIndexMap.get(authorId)).toBe(idx);
+      });
+    });
+
+    it('vectorizes books using O(1) map lookups without invoking indexOf', () => {
+      const vocab = buildFeatureVocabulary(sampleCatalog);
+
+      const tagIndexOfSpy = vi.spyOn(vocab.tags, 'indexOf');
+      const authorIndexOfSpy = vi.spyOn(vocab.authorIds, 'indexOf');
+
+      const vector = vectorizeBook(bookA, vocab);
+
+      expect(vector.length).toBe(vocab.tags.length + vocab.authorIds.length);
+      expect(tagIndexOfSpy).not.toHaveBeenCalled();
+      expect(authorIndexOfSpy).not.toHaveBeenCalled();
+
+      tagIndexOfSpy.mockRestore();
+      authorIndexOfSpy.mockRestore();
+    });
+
+    it('produces identical vectors between indexed O(1) lookups and legacy fallback vocabulary', () => {
+      const vocab = buildFeatureVocabulary(sampleCatalog);
+
+      // Create a legacy vocabulary structure without maps
+      const legacyVocab: FeatureVocabulary = {
+        tags: [...vocab.tags],
+        authorIds: [...vocab.authorIds],
+      };
+
+      for (const book of sampleCatalog) {
+        const indexedVector = vectorizeBook(book, vocab);
+        const legacyVector = vectorizeBook(book, legacyVocab);
+        expect(indexedVector).toEqual(legacyVector);
+      }
+
+      // Also verify with an unknown book containing non-existent tags and author
+      const unknownBook = mockBook('b-unknown', 'Desconhecido', 'author-999', ['TagInexistente']);
+      expect(vectorizeBook(unknownBook, vocab)).toEqual(vectorizeBook(unknownBook, legacyVocab));
+    });
+
+    it('falls back to indexOf when vocabulary lacks index maps (backward compatibility)', () => {
+      const vocab = buildFeatureVocabulary([bookA]);
+
+      const legacyVocab: FeatureVocabulary = {
+        tags: [...vocab.tags],
+        authorIds: [...vocab.authorIds],
+      };
+
+      const tagIndexOfSpy = vi.spyOn(legacyVocab.tags, 'indexOf');
+      const authorIndexOfSpy = vi.spyOn(legacyVocab.authorIds, 'indexOf');
+
+      const vector = vectorizeBook(bookA, legacyVocab);
+
+      expect(vector.length).toBe(legacyVocab.tags.length + legacyVocab.authorIds.length);
+      expect(tagIndexOfSpy).toHaveBeenCalled();
+      expect(authorIndexOfSpy).toHaveBeenCalled();
+
+      tagIndexOfSpy.mockRestore();
+      authorIndexOfSpy.mockRestore();
     });
   });
 

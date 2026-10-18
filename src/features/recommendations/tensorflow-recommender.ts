@@ -3,6 +3,7 @@ import type { Book } from '@/features/catalog/queries';
 import type { BookReadingStatus } from '@/features/reading/schemas';
 import type {
   FeatureVocabulary,
+  IndexedVocabulary,
   RecommendationOptions,
   ScoredBook,
 } from './types';
@@ -17,7 +18,7 @@ const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBook
 /**
  * Builds normalized feature vocabulary from a list of books.
  */
-export function buildFeatureVocabulary(books: Book[]): FeatureVocabulary {
+export function buildFeatureVocabulary(books: Book[]): IndexedVocabulary {
   const tagSet = new Set<string>();
   const authorSet = new Set<string>();
 
@@ -33,9 +34,17 @@ export function buildFeatureVocabulary(books: Book[]): FeatureVocabulary {
     }
   }
 
+  const tags = Array.from(tagSet).sort();
+  const authorIds = Array.from(authorSet).sort();
+  const tagIndexMap = new Map<string, number>(tags.map((t, i) => [t, i]));
+  const authorIndexMap = new Map<string, number>(authorIds.map((a, i) => [a, i]));
+
   return {
-    tags: Array.from(tagSet).sort(),
-    authorIds: Array.from(authorSet).sort(),
+    tags,
+    authorIds,
+    tagIndexMap,
+    authorIndexMap,
+    tagIdfMap: new Map<string, number>(),
   };
 }
 
@@ -47,7 +56,9 @@ export function vectorizeBook(book: Book, vocab: FeatureVocabulary): number[] {
 
   // Author match feature (weighted 1.5 for high author affinity)
   if (book.author_id) {
-    const authorIdx = vocab.authorIds.indexOf(book.author_id);
+    const authorIdx = vocab.authorIndexMap
+      ? (vocab.authorIndexMap.get(book.author_id) ?? -1)
+      : vocab.authorIds.indexOf(book.author_id);
     if (authorIdx !== -1) {
       vector[vocab.tags.length + authorIdx] = 1.5;
     }
@@ -57,7 +68,9 @@ export function vectorizeBook(book: Book, vocab: FeatureVocabulary): number[] {
   if (Array.isArray(book.tags)) {
     for (const tag of book.tags) {
       const clean = tag.trim().toLowerCase();
-      const tagIdx = vocab.tags.indexOf(clean);
+      const tagIdx = vocab.tagIndexMap
+        ? (vocab.tagIndexMap.get(clean) ?? -1)
+        : vocab.tags.indexOf(clean);
       if (tagIdx !== -1) {
         vector[tagIdx] = 1.0;
       }

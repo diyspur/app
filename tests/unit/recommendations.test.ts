@@ -16,7 +16,6 @@ import {
   computeNativeRecommendations,
   rankCatalogBooksNative,
   applyMMR,
-  generateRecommendationReason,
   formatRecommendationTag,
 } from '@/features/recommendations/native-recommender';
 

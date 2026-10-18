@@ -7,5 +7,20 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: { baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000', trace: 'retain-on-failure', ...devices['Desktop Chrome'] },
-  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : { command: 'npm run dev -- --hostname 127.0.0.1', url: 'http://127.0.0.1:3000', reuseExistingServer: !process.env.CI, timeout: 120_000 },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev -- --hostname 127.0.0.1',
+        url: 'http://127.0.0.1:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        env: {
+          PROMETHEUS_SCRAPE_TOKEN:
+            process.env.PROMETHEUS_SCRAPE_TOKEN || 'diyspur_prometheus_secret_token_change_me',
+          NEXT_PUBLIC_POSTHOG_KEY:
+            process.env.NEXT_PUBLIC_POSTHOG_KEY || 'phc_test_dummy_key_for_testing',
+          NEXT_PUBLIC_POSTHOG_HOST:
+            process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+        },
+      },
 });

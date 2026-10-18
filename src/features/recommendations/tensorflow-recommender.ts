@@ -6,7 +6,6 @@ import type {
   IndexedVocabulary,
   RecommendationOptions,
   ScoredBook,
-  BookInteraction,
 } from './types';
 import {
   applyMMR,

@@ -247,6 +247,7 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
 
     // Sincroniza estado inicial no cliente
     const current = readAnalyticsConsent();
+    setConsent(current);
     if (current === 'granted') {
       initializePostHog();
       initGa4();

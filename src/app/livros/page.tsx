@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { getBooksResult } from '@/features/catalog/queries';
 import { PersonalizedCatalog } from '@/components/catalog/personalized-catalog';
 import { BookSearch } from '@/components/catalog/book-search';
@@ -32,9 +33,15 @@ export default async function BooksPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q = '', page = '1' } = await searchParams;
-  const currentPage = Math.max(1, parseInt(page, 10) || 1);
-  const result = await getBooksResult(q, currentPage, 24);
+  const params = await searchParams;
+  const { q = '' } = params;
+
+  // Canonicalize URLs from the old pagination UI.
+  if (params.page) {
+    redirect(`/livros${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  }
+
+  const result = await getBooksResult(q, 1, 24);
 
   if (!result.ok) {
     return (
@@ -55,7 +62,7 @@ export default async function BooksPage({
     );
   }
 
-  const { books, total, totalPages, isPersonalized } = result.data;
+  const { books, total, isPersonalized } = result.data;
 
   return (
     <section className="container">
@@ -105,36 +112,13 @@ export default async function BooksPage({
       </header>
 
       {books.length ? (
-        <>
-          <PersonalizedCatalog
-            initialBooks={books}
-            isServerPersonalized={Boolean(isPersonalized)}
-          />
-
-          {totalPages > 1 && (
-            <nav aria-label="Paginação do catálogo" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '32px' }}>
-              {currentPage > 1 ? (
-                <Link
-                  href={`/livros?page=${currentPage - 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-                  className="button button-small button-quiet"
-                >
-                  ← Página anterior
-                </Link>
-              ) : null}
-              <span style={{ alignSelf: 'center', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                Página {currentPage} de {totalPages}
-              </span>
-              {currentPage < totalPages ? (
-                <Link
-                  href={`/livros?page=${currentPage + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-                  className="button button-small"
-                >
-                  Próxima página →
-                </Link>
-              ) : null}
-            </nav>
-          )}
-        </>
+        <PersonalizedCatalog
+          key={q}
+          initialBooks={books}
+          initialQuery={q}
+          totalBooks={total}
+          isServerPersonalized={Boolean(isPersonalized)}
+        />
       ) : (
         <div className="empty-state">
           <div className="empty-state-mark" aria-hidden="true">

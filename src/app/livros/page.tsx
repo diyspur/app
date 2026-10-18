@@ -55,7 +55,7 @@ export default async function BooksPage({
     );
   }
 
-  const { books, total, totalPages } = result.data;
+  const { books, total, totalPages, isPersonalized } = result.data;
 
   return (
     <section className="container">
@@ -67,6 +67,11 @@ export default async function BooksPage({
           <em>chama outra.</em>
         </h1>
         <p>Descubra a seleção de leituras DIYSPUR e encontre sua próxima conversa favorita.</p>
+        {isPersonalized && !q && (
+          <p className="field-hint" style={{ marginTop: '8px' }}>
+            ✦ Lista personalizada com base nas suas leituras: recomendações no início e livros já lidos/em andamento ao final.
+          </p>
+        )}
         <Suspense
           fallback={
             <form className="search-form" action="/livros" method="get">

@@ -3,7 +3,7 @@ export default function BooksLoading() {
     <section className="container" aria-label="Carregando catálogo">
       <div className="page-intro">
         <span className="eyebrow">A biblioteca do clube</span>
-        <h1>Carregando leituras…</h1>
+        <div className="display-title" aria-live="polite">Carregando leituras…</div>
       </div>
       <div className="book-grid">
         {Array.from({ length: 8 }, (_, i) => (

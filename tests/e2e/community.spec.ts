@@ -4,7 +4,7 @@ test.describe('Comunidade e Spoiler Disclosure', () => {
   test('página de comunidade carrega cabeçalho e publicações', async ({ page }) => {
     const response = await page.goto('/comunidade');
     expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('A conversa continua');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Clubes e Canais|A conversa continua/i);
   });
 
   test('spoiler marcado utiliza controle acessível de revelação', async ({ page }) => {

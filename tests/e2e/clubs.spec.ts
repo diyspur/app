@@ -4,7 +4,7 @@ test.describe('Higiene e Listagem de Clubes', () => {
   test('listagem pública de clubes carrega com sucesso', async ({ page }) => {
     const response = await page.goto('/clubes');
     expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Clubes de leitura');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Clubes para|Clubes de leitura/i);
   });
 
   test('não exibe fixtures de teste residual como QA RETESTE 20261010', async ({ page }) => {

@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { createServerSupabase } from '@/lib/supabase/clients';
 import { type QueryResult, querySuccess, queryFailure } from '@/lib/queries/result';
+import type { BookReadingStatus } from '@/features/reading/schemas';
 
 export type Book = {
   id: string; title: string; slug: string; author_id: string; cover_url: string | null;
@@ -14,6 +15,9 @@ export type Book = {
   warnings?: { label: string; description: string | null; severity: string; is_community: boolean }[];
   readerLists?: { id: string; title: string }[];
   signedIn?: boolean;
+  readingStatus?: 'want_to_read' | 'reading' | 'read' | 'dnf' | null;
+  isRecommended?: boolean;
+  recommendationScore?: number;
 };
 export type Season = { id: string; number: number; title: string; slug: string; book_id: string; status: string; description: string | null; starts_at: string | null; ends_at: string | null; cover_url: string | null };
 export type Chapter = { id: string; season_id: string; number: number; title: string; reading_range: string | null; youtube_url: string | null; summary: string | null; published_at: string | null };
@@ -44,6 +48,7 @@ export type CatalogPageResult = {
   total: number;
   page: number;
   totalPages: number;
+  isPersonalized?: boolean;
 };
 
 export const getBooksResult = cache(
@@ -51,15 +56,58 @@ export const getBooksResult = cache(
     const client = await createServerSupabase();
     const offset = Math.max(0, (page - 1) * limit);
 
+    const term = search?.trim().replace(/[%,()]/g, '');
+
+    // Check if the user is authenticated and has reading history
+    let userReadingsMap: Map<string, BookReadingStatus> | null = null;
+    let externalHistoryBooks: Book[] = [];
+
+    try {
+      const { data: claims } = await client.auth.getClaims();
+      const readerId = typeof claims?.claims?.sub === 'string' ? claims.claims.sub : null;
+
+      if (readerId) {
+        const { data: readingRows } = await client
+          .from('user_book_readings')
+          .select('book_id, status')
+          .eq('user_id', readerId);
+
+        if (readingRows && readingRows.length > 0) {
+          userReadingsMap = new Map(
+            readingRows.map((r) => [r.book_id, r.status as BookReadingStatus]),
+          );
+
+          const historyIds = readingRows
+            .filter((r) => r.status === 'read' || r.status === 'reading')
+            .map((r) => r.book_id);
+
+          if (historyIds.length > 0) {
+            const { data: histData } = await client
+              .from('books')
+              .select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm')
+              .in('id', historyIds);
+            externalHistoryBooks = (histData ?? []) as Book[];
+          }
+        }
+      }
+    } catch {
+      // Auth or reading query fallback: proceed as guest
+      userReadingsMap = null;
+    }
+
     let query = client
       .from('books')
       .select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .order('id', { ascending: true })
-      .range(offset, offset + limit - 1);
+      .order('id', { ascending: true });
 
-    const term = search?.trim().replace(/[%,()]/g, '');
     if (term) query = query.ilike('title', `%${term}%`);
+
+    if (userReadingsMap && userReadingsMap.size > 0) {
+      query = query.limit(500);
+    } else {
+      query = query.range(offset, offset + limit - 1);
+    }
 
     const { data, count, error } = await query;
     if (error) {
@@ -77,6 +125,7 @@ export const getBooksResult = cache(
         total: count ?? 0,
         page,
         totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+        isPersonalized: false,
       });
     }
 
@@ -91,12 +140,30 @@ export const getBooksResult = cache(
       authors: { name: byId.get(book.author_id) ?? 'Autor(a)' },
     }));
 
+    if (userReadingsMap && userReadingsMap.size > 0) {
+      const { rankCatalogBooks } = await import('@/features/recommendations/tensorflow-recommender');
+      const rankedBooks = rankCatalogBooks(booksWithAuthors, userReadingsMap, {
+        externalHistoryBooks,
+      });
+      const total = count ?? rankedBooks.length;
+      const paginatedBooks = rankedBooks.slice(offset, offset + limit);
+
+      return querySuccess({
+        books: paginatedBooks,
+        total,
+        page,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        isPersonalized: true,
+      });
+    }
+
     const total = count ?? books.length;
     return querySuccess({
       books: booksWithAuthors,
       total,
       page,
       totalPages: Math.max(1, Math.ceil(total / limit)),
+      isPersonalized: false,
     });
   },
 );

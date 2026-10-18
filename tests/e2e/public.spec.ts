@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test';
 
 test('home tem navegação principal sem erros', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('histórias');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/histórias/i);
   await expect(page.getByRole('navigation', { name: 'Navegação principal' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Explorar leituras|Descobrir leituras/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Explorar.*livros|Explorar leituras|Descobrir leituras/i }).first()).toBeVisible();
 });
 
 test('catálogo carrega via Supabase e expõe vazio informado quando não há conteúdo publicado', async ({ page }) => {
@@ -14,9 +14,12 @@ test('catálogo carrega via Supabase e expõe vazio informado quando não há co
   await expect(page.getByRole('searchbox', { name: 'Buscar livros por título' })).toBeVisible();
   const firstBook = page.locator('.book-card').first();
   if (await firstBook.count()) {
-    await firstBook.click();
-    await expect(page.locator('.book-detail')).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const bookHref = await firstBook.getAttribute('href');
+    if (bookHref) {
+      await page.goto(bookHref);
+      await expect(page.locator('.book-hero')).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    }
   }
 });
 

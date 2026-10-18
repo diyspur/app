@@ -20,13 +20,28 @@ export function BookCard({ book }: { book: Book }) {
       </div>
       <h3>{book.title}</h3>
       <p>{book.authors?.name ?? 'Autor(a) convidado(a)'}</p>
-      {book.tags?.length ? (
-        <span className="book-card-tags">
-          {book.tags.slice(0, 2).map((tag) => (
-            <span className="tag" key={tag}>{tag}</span>
-          ))}
-        </span>
-      ) : null}
+      <div className="book-card-tags">
+        {book.isRecommended ? (
+          <span className="tag tag-recommended" title="Recomendado com base nas suas leituras">
+            ★ Recomendado
+          </span>
+        ) : null}
+        {book.readingStatus === 'reading' && (
+          <span className="tag tag-reading">Lendo</span>
+        )}
+        {book.readingStatus === 'read' && (
+          <span className="tag tag-read">Já li</span>
+        )}
+        {book.readingStatus === 'dnf' && (
+          <span className="tag tag-dnf">Desistiu</span>
+        )}
+        {book.readingStatus === 'want_to_read' && (
+          <span className="tag tag-want-to-read">Quero ler</span>
+        )}
+        {book.tags?.slice(0, 2).map((tag) => (
+          <span className="tag" key={tag}>{tag}</span>
+        ))}
+      </div>
     </Link>
   );
 }

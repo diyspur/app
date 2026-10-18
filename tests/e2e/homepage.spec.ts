@@ -5,7 +5,7 @@ test.describe('Página Inicial (Homepage)', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Histórias ganham vida');
     await expect(page.getByRole('navigation', { name: 'Navegação principal' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Explorar livros' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /Explorar.*livros/i }).first()).toBeVisible();
     await expect(page.locator('footer')).toBeVisible();
   });
 

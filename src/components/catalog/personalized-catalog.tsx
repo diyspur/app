@@ -39,11 +39,11 @@ export function PersonalizedCatalog({
           }
         }
 
-        // Import dinâmico sob demanda
-        const { rankCatalogBooks } = await import(
-          '@/features/recommendations/tensorflow-recommender'
+        // Import dinâmico sob demanda (utiliza motor nativo ultraleve sem baixar TensorFlow.js)
+        const { rankCatalog } = await import(
+          '@/features/recommendations/recommender-engine'
         );
-        const ranked = rankCatalogBooks(initialBooks, serverReadings, {
+        const ranked = rankCatalog(initialBooks, serverReadings, {
           interactions,
         });
 

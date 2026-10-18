@@ -146,8 +146,8 @@ export const getBooksResult = cache(
           });
         }
 
-        const { rankCatalogBooks } = await import('@/features/recommendations/tensorflow-recommender');
-        const rankedBooks = rankCatalogBooks(candidateBooks, userReadingsMap, {
+        const { rankCatalog } = await import('@/features/recommendations/recommender-engine');
+        const rankedBooks = rankCatalog(candidateBooks, userReadingsMap, {
           externalHistoryBooks,
           enableMMR: true,
         });
@@ -209,7 +209,7 @@ export const getBooksResult = cache(
           {
             ...fullBook,
             authors: { name: authorMap.get(fullBook.author_id) ?? 'Autor(a)' },
-            readingStatus: itemMeta?.readingStatus ?? userReadingsMap?.get(id),
+            readingStatus: userReadingsMap?.get(id) ?? itemMeta?.readingStatus,
             isRecommended: itemMeta?.isRecommended,
             recommendationScore: itemMeta?.recommendationScore,
             recommendationReason: itemMeta?.recommendationReason,

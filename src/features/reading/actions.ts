@@ -64,6 +64,17 @@ export async function setMyBookReadingAction(input: {
         revalidatePath('/metas');
         revalidatePath('/ranking');
 
+        try {
+          const { data: claims } = await supabase.auth.getClaims();
+          const readerId = typeof claims?.claims?.sub === 'string' ? claims.claims.sub : null;
+          if (readerId) {
+            const { invalidateUserRanking } = await import('@/features/recommendations/recommender-cache');
+            invalidateUserRanking(readerId);
+          }
+        } catch {
+          // Non-blocking cache invalidation fallback
+        }
+
         const statusLabel: Record<BookReadingStatus, string> = {
           want_to_read: 'Quero ler',
           reading: 'Lendo agora',

@@ -51,6 +51,9 @@ export type CatalogPageResult = {
   isPersonalized?: boolean;
 };
 
+const FULL_BOOK_COLUMNS =
+  'id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm';
+
 export const getBooksResult = cache(
   async (search?: string, page: number = 1, limit: number = 24): Promise<QueryResult<CatalogPageResult>> => {
     const client = await createServerSupabase();
@@ -84,7 +87,7 @@ export const getBooksResult = cache(
           if (historyIds.length > 0) {
             const { data: histData } = await client
               .from('books')
-              .select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm')
+              .select('id,author_id,tags')
               .in('id', historyIds);
             externalHistoryBooks = (histData ?? []) as Book[];
           }
@@ -95,19 +98,105 @@ export const getBooksResult = cache(
       userReadingsMap = null;
     }
 
+    if (userReadingsMap && userReadingsMap.size > 0) {
+      let candidateQuery = client
+        .from('books')
+        .select('id,author_id,tags', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true });
+
+      if (term) candidateQuery = candidateQuery.ilike('title', `%${term}%`);
+
+      const { data, count, error } = await candidateQuery;
+      if (error) {
+        if (error.code === 'PGRST103' && page > 1) {
+          return getBooksResult(search, 1, limit);
+        }
+        console.error('Catalog query failed', error.code);
+        return queryFailure('unavailable', 'Não foi possível carregar o catálogo de livros no momento.');
+      }
+
+      const candidateBooks = (data ?? []) as Book[];
+      if (!candidateBooks.length) {
+        return querySuccess({
+          books: [],
+          total: count ?? 0,
+          page,
+          totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+          isPersonalized: false,
+        });
+      }
+
+      const { rankCatalogBooks } = await import('@/features/recommendations/tensorflow-recommender');
+      const rankedBooks = rankCatalogBooks(candidateBooks, userReadingsMap, {
+        externalHistoryBooks,
+      });
+
+      const total = count ?? rankedBooks.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const pageSlice = rankedBooks.slice(offset, offset + limit);
+
+      if (!pageSlice.length) {
+        return querySuccess({
+          books: [],
+          total,
+          page,
+          totalPages,
+          isPersonalized: true,
+        });
+      }
+
+      const pageIds = pageSlice.map((b) => b.id);
+      const { data: fullBooksData, error: fullError } = await client
+        .from('books')
+        .select(FULL_BOOK_COLUMNS)
+        .in('id', pageIds);
+
+      if (fullError) {
+        console.error('Catalog full books query failed', fullError.code);
+        return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
+      }
+
+      const fullBooks = (fullBooksData ?? []) as Book[];
+      const authorIds = Array.from(new Set(fullBooks.map((b) => b.author_id).filter(Boolean)));
+      const { data: authors } = authorIds.length
+        ? await client.from('authors').select('id,name').in('id', authorIds)
+        : { data: [] };
+
+      const authorMap = new Map((authors ?? []).map((a) => [a.id, a.name]));
+      const fullBooksMap = new Map(fullBooks.map((b) => [b.id, b]));
+
+      const paginatedBooks: Book[] = pageSlice.flatMap((rankedItem) => {
+        const fullBook = fullBooksMap.get(rankedItem.id);
+        if (!fullBook) return [];
+        return [
+          {
+            ...fullBook,
+            authors: { name: authorMap.get(fullBook.author_id) ?? 'Autor(a)' },
+            readingStatus: rankedItem.readingStatus,
+            isRecommended: rankedItem.isRecommended,
+            recommendationScore: rankedItem.recommendationScore,
+          },
+        ];
+      });
+
+      return querySuccess({
+        books: paginatedBooks,
+        total,
+        page,
+        totalPages,
+        isPersonalized: true,
+      });
+    }
+
     let query = client
       .from('books')
-      .select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm', { count: 'exact' })
+      .select(FULL_BOOK_COLUMNS, { count: 'exact' })
       .order('created_at', { ascending: false })
       .order('id', { ascending: true });
 
     if (term) query = query.ilike('title', `%${term}%`);
-
-    if (userReadingsMap && userReadingsMap.size > 0) {
-      query = query.limit(500);
-    } else {
-      query = query.range(offset, offset + limit - 1);
-    }
+    query = query.range(offset, offset + limit - 1);
 
     const { data, count, error } = await query;
     if (error) {
@@ -139,23 +228,6 @@ export const getBooksResult = cache(
       ...book,
       authors: { name: byId.get(book.author_id) ?? 'Autor(a)' },
     }));
-
-    if (userReadingsMap && userReadingsMap.size > 0) {
-      const { rankCatalogBooks } = await import('@/features/recommendations/tensorflow-recommender');
-      const rankedBooks = rankCatalogBooks(booksWithAuthors, userReadingsMap, {
-        externalHistoryBooks,
-      });
-      const total = count ?? rankedBooks.length;
-      const paginatedBooks = rankedBooks.slice(offset, offset + limit);
-
-      return querySuccess({
-        books: paginatedBooks,
-        total,
-        page,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
-        isPersonalized: true,
-      });
-    }
 
     const total = count ?? books.length;
     return querySuccess({

@@ -12,7 +12,8 @@ test.describe('Catálogo e Ficha de Livros', () => {
   test('API do catálogo rejeita um número de página inválido', async ({ request }) => {
     const response = await request.get('/api/books/catalog?page=abc');
     expect(response.status()).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_page' });
+    const payload = await response.json();
+    expect(payload).toMatchObject({ error: 'invalid_page' });
   });
 
   test('busca por termo inexistente exibe estado vazio apropriado', async ({ page }) => {

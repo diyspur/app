@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import '@/styles/global.css';
 import { SiteHeader, SiteFooter } from '@/components/site-shell';
 import { JsonLd } from '@/components/json-ld';
-import { PostHogProvider } from '@/components/analytics/posthog-provider';
+import { TelemetryProvider } from '@/components/analytics/telemetry-provider';
 import { AnalyticsConsentBanner } from '@/components/analytics/analytics-consent-banner';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://diyspur.vercel.app';
@@ -118,12 +118,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <a className="skip-link" href="#conteudo">Pular para o conteúdo</a>
-        <PostHogProvider>
+        <TelemetryProvider>
           <SiteHeader />
           <main id="conteudo" tabIndex={-1}>{children}</main>
           <SiteFooter />
           <AnalyticsConsentBanner />
-        </PostHogProvider>
+        </TelemetryProvider>
       </body>
     </html>
   );

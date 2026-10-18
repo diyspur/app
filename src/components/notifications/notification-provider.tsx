@@ -157,9 +157,19 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             if (!active) return;
             const row = payload.new as NotificationItemRecord | undefined;
             if (!row?.id) return;
-            setItems((prev) =>
-              prev.map((item) => (item.id === row.id ? { ...item, read_at: row.read_at } : item)),
-            );
+            setItems((prev) => {
+              const prevItem = prev.find((item) => item.id === row.id);
+              const wasUnread = prevItem ? prevItem.read_at === null : false;
+              const isNowRead = row.read_at !== null;
+
+              if (wasUnread && isNowRead) {
+                setUnreadCount((c) => Math.max(0, c - 1));
+              } else if (!wasUnread && !isNowRead) {
+                setUnreadCount((c) => c + 1);
+              }
+
+              return prev.map((item) => (item.id === row.id ? { ...item, read_at: row.read_at } : item));
+            });
           },
         )
         .subscribe();

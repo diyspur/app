@@ -29,6 +29,22 @@ export function NotificationCenter({ open, onClose }: NotificationCenterProps) {
 
   useEffect(() => {
     if (!open) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), a[href], input, [tabindex]:not([tabindex="-1"])',
+    );
+    firstFocusable?.focus();
+
+    return () => {
+      if (previouslyFocused && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {

@@ -97,6 +97,57 @@ export function ChannelChat({
             });
           },
         )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'club_messages',
+            filter: `channel_id=eq.${activeChannel.id}`,
+          },
+          (payload) => {
+            if (!mounted) return;
+            const row = payload.new as {
+              id?: string;
+              content?: string;
+              version?: number;
+              edited_at?: string | null;
+              deleted_at?: string | null;
+            };
+            if (!row?.id) return;
+            if (row.deleted_at) {
+              setMessages((prev) => prev.filter((m) => m.id !== row.id));
+              return;
+            }
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === row.id
+                  ? {
+                      ...m,
+                      content: row.content ?? m.content,
+                      version: row.version ?? m.version,
+                      editedAt: row.edited_at ?? m.editedAt,
+                    }
+                  : m,
+              ),
+            );
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'club_messages',
+            filter: `channel_id=eq.${activeChannel.id}`,
+          },
+          (payload) => {
+            if (!mounted) return;
+            const oldRow = payload.old as { id?: string };
+            if (!oldRow?.id) return;
+            setMessages((prev) => prev.filter((m) => m.id !== oldRow.id));
+          },
+        )
         .subscribe();
 
       cleanup = () => {
@@ -135,6 +186,52 @@ export function ChannelChat({
 
   const handleAuthorBlocked = (authorId: string) => {
     setMessages((prev) => prev.filter((m) => m.authorId !== authorId));
+  };
+
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasMoreEarlier, setHasMoreEarlier] = useState(initialMessages.length >= 20);
+
+  const handleLoadEarlier = async () => {
+    if (loadingEarlier || messages.length === 0) return;
+    setLoadingEarlier(true);
+    const oldest = messages[0];
+    try {
+      const supabase = createBrowserSupabase();
+      const { data, error } = await supabase.rpc('list_club_messages', {
+        p_channel_id: activeChannel.id,
+        p_limit: 30,
+        p_cursor: oldest.id,
+      });
+
+      if (!error && Array.isArray(data)) {
+        if (data.length < 30) {
+          setHasMoreEarlier(false);
+        }
+        const olderViews: ClubMessageView[] = data.map((row: any) => ({
+          id: row.id,
+          channelId: row.channel_id,
+          authorId: row.author_id,
+          authorName: row.author_name || 'Leitor(a)',
+          authorUsername: row.author_username,
+          authorAvatarUrl: row.author_avatar_url,
+          content: row.content,
+          replyToId: row.reply_to_id,
+          videoSec: row.video_sec,
+          version: row.version,
+          createdAt: row.created_at,
+          editedAt: row.edited_at,
+        }));
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const uniqueOlder = olderViews.filter((m) => !existingIds.has(m.id));
+          return [...uniqueOlder, ...prev];
+        });
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setLoadingEarlier(false);
+    }
   };
 
   const isMember = Boolean(viewerRole);
@@ -240,6 +337,18 @@ export function ChannelChat({
         )
       ) : (
         <>
+          {hasMoreEarlier && (
+            <div style={{ textAlign: 'center', margin: '8px 0 16px' }}>
+              <button
+                type="button"
+                className="button button-small button-quiet"
+                disabled={loadingEarlier}
+                onClick={handleLoadEarlier}
+              >
+                {loadingEarlier ? 'Carregando anteriores…' : '↑ Carregar mensagens anteriores'}
+              </button>
+            </div>
+          )}
           <MessageList
             messages={messages}
             clubId={club.id}

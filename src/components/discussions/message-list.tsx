@@ -219,6 +219,7 @@ export function MessageList({
                     onChange={(e) => setEditDraft(e.target.value)}
                     maxLength={4000}
                     className="composer-textarea"
+                    aria-label="Editar conteúdo da mensagem"
                   />
                   <div className="action-row" style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                     <button

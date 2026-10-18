@@ -7,6 +7,7 @@ import {
   reorderReadingList,
   updateReadingList,
 } from '@/features/lists/actions';
+import { ListSharing, type ListCollaboratorItem } from './list-sharing';
 
 type Item = { id: string; position: number };
 
@@ -15,12 +16,20 @@ export function ListManagement({
   version,
   title,
   description,
+  visibility = 'private',
+  isCollaborative = false,
+  isOwned = true,
+  collaborators = [],
   items,
 }: {
   listId: string;
   version: number;
   title: string;
   description: string | null;
+  visibility?: 'private' | 'public' | 'unlisted';
+  isCollaborative?: boolean;
+  isOwned?: boolean;
+  collaborators?: ListCollaboratorItem[];
   items: Item[];
 }) {
   const [open, setOpen] = useState(false);
@@ -33,6 +42,12 @@ export function ListManagement({
         listId,
         title: form.get('title'),
         description: form.get('description'),
+        ...(isOwned
+          ? {
+              visibility: form.get('visibility') === 'public' ? 'public' : 'private',
+              isCollaborative: form.get('isCollaborative') === 'on',
+            }
+          : {}),
       });
       setResult(response.message);
     });
@@ -66,11 +81,11 @@ export function ListManagement({
         {open ? 'Fechar gestão' : 'Gerenciar lista'}
       </button>
       {open && (
-        <div className="member-card">
+        <div className="member-card" style={{ marginTop: '0.75rem' }}>
           <form className="auth-form" action={edit}>
             <label>
               Nome
-              <input className="field" name="title" defaultValue={title} />
+              <input className="field" name="title" defaultValue={title} required />
             </label>
             <label>
               Descrição
@@ -81,35 +96,71 @@ export function ListManagement({
                 rows={3}
               />
             </label>
+            {isOwned && (
+              <>
+                <label>
+                  Visibilidade
+                  <select
+                    className="field"
+                    name="visibility"
+                    defaultValue={visibility === 'public' ? 'public' : 'private'}
+                  >
+                    <option value="private">Privada (apenas você e colaboradores)</option>
+                    <option value="public">Pública (visível no perfil)</option>
+                  </select>
+                </label>
+                <label className="checkbox-line">
+                  <input
+                    type="checkbox"
+                    name="isCollaborative"
+                    defaultChecked={isCollaborative}
+                  />
+                  <span>Permitir colaboração</span>
+                </label>
+              </>
+            )}
             <button className="button button-small" disabled={busy}>
-              Salvar lista
+              {busy ? 'Salvando…' : 'Salvar lista'}
             </button>
           </form>
+
+          {isOwned && (
+            <ListSharing
+              listId={listId}
+              isOwned={isOwned}
+              collaborators={collaborators}
+            />
+          )}
+
           {items.length > 1 && (
-            <div className="chapter-progress-actions">
-              {items.map((item, index) => (
-                <span key={item.id}>
-                  <button
-                    className="button button-quiet button-small"
-                    disabled={busy || index === 0}
-                    onClick={() => move(index, -1)}
-                    aria-label="Mover para cima"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="button button-quiet button-small"
-                    disabled={busy || index === items.length - 1}
-                    onClick={() => move(index, 1)}
-                    aria-label="Mover para baixo"
-                  >
-                    ↓
-                  </button>
-                </span>
-              ))}
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border-subtle, #333)' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', font: '500 1rem var(--font-serif)' }}>Reordenar itens</h4>
+              <div className="chapter-progress-actions">
+                {items.map((item, index) => (
+                  <span key={item.id}>
+                    <button
+                      className="button button-quiet button-small"
+                      disabled={busy || index === 0}
+                      onClick={() => move(index, -1)}
+                      aria-label="Mover para cima"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="button button-quiet button-small"
+                      disabled={busy || index === items.length - 1}
+                      onClick={() => move(index, 1)}
+                      aria-label="Mover para baixo"
+                    >
+                      ↓
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
-          {result && <p className="action-feedback" role="status">{result}</p>}
+
+          {result && <p className="action-feedback" role="status" style={{ marginTop: '0.75rem' }}>{result}</p>}
         </div>
       )}
     </div>

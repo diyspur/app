@@ -244,7 +244,18 @@ function ListCard({ list, books, chapters }: { list: ListView; books: Map<string
       </p>
       {list.tags && list.tags.length > 0 && <div className="detail-pills" aria-label="Temas da lista">{list.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>}
       {list.collaboration && !list.collaboration.can_edit && <p className="notice" style={{ marginTop: 14 }}>Você tem acesso por colaboração. Esta visualização é somente leitura.</p>}
-      {(list.isOwned || list.collaboration?.can_edit) && <ListManagement listId={list.id} version={list.version} title={list.title} description={list.description} items={list.items.map((item) => ({ id: item.id, position: item.position }))} />}
+      {(list.isOwned || list.collaboration?.can_edit) && (
+        <ListManagement
+          listId={list.id}
+          version={list.version}
+          title={list.title}
+          description={list.description}
+          visibility={list.visibility}
+          isCollaborative={list.is_collaborative}
+          isOwned={list.isOwned}
+          items={list.items.map((item) => ({ id: item.id, position: item.position }))}
+        />
+      )}
       <section aria-labelledby={`${headingId}-items`} style={{ marginTop: 22 }}>
         <div className="section-head" style={{ marginBottom: 12 }}>
           <h3 id={`${headingId}-items`} style={{ font: '500 17px var(--font-serif)' }}>Itens da lista</h3>

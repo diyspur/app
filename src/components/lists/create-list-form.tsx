@@ -15,6 +15,8 @@ export function CreateListForm() {
       const result = await createReadingList({
         title: values.get('title'),
         description: values.get('description'),
+        visibility: values.get('visibility') === 'public' ? 'public' : 'private',
+        isCollaborative: values.get('isCollaborative') === 'on',
       });
       setFeedback(result.message);
       if (result.ok) form.reset();
@@ -53,8 +55,21 @@ export function CreateListForm() {
           placeholder="Por que esta lista existe?"
         />
       </div>
+      <div className="field-group">
+        <label htmlFor="list-visibility">Visibilidade da lista</label>
+        <select id="list-visibility" className="field" name="visibility" defaultValue="private">
+          <option value="private">Privada (apenas você e colaboradores)</option>
+          <option value="public">Pública (visível no seu perfil)</option>
+        </select>
+      </div>
+      <div className="field-group">
+        <label className="checkbox-line" htmlFor="list-collab">
+          <input id="list-collab" type="checkbox" name="isCollaborative" />
+          <span>Permitir colaboração de outros leitores</span>
+        </label>
+      </div>
       <button className="button button-small" type="submit" disabled={busy}>
-        {busy ? 'Criando…' : 'Criar lista privada'}
+        {busy ? 'Criando…' : 'Criar lista'}
       </button>
       {feedback && <p className="action-feedback" role="status">{feedback}</p>}
     </form>

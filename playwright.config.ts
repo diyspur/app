@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+
+process.env.QA_SEASON_SLUG = process.env.QA_SEASON_SLUG || 't1-verity';
+process.env.QA_BOOK_SLUG = process.env.QA_BOOK_SLUG || 'verity';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
@@ -7,6 +11,12 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: { baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000', trace: 'retain-on-failure', ...devices['Desktop Chrome'] },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
@@ -21,6 +31,9 @@ export default defineConfig({
             process.env.NEXT_PUBLIC_POSTHOG_KEY || 'phc_test_dummy_key_for_testing',
           NEXT_PUBLIC_POSTHOG_HOST:
             process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+          QA_SEASON_SLUG: process.env.QA_SEASON_SLUG || 't1-verity',
+          QA_BOOK_SLUG: process.env.QA_BOOK_SLUG || 'verity',
         },
       },
 });
+

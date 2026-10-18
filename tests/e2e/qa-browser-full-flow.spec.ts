@@ -8,13 +8,24 @@ test.describe('Bateria Completa de QA no Navegador (B01..B30 e Fluxos F01..F41)'
     await expect(page.locator('footer')).toBeVisible();
 
     // Alternador de tema funcional
-    const themeBtn = page.getByRole('button', { name: /Alternar tema|Mudar tema|Tema escuro|Tema claro/i });
-    if (await themeBtn.isVisible()) {
-      const initial = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-      await themeBtn.click();
-      const updated = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-      expect(updated).not.toBe(initial);
-    }
+    const toggle = page.getByRole('switch', { name: /Alternar tema/ });
+    await expect(toggle).toBeVisible();
+    const originalTheme = await page.locator('html').getAttribute('data-theme');
+    await toggle.click();
+    await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(originalTheme);
+    await toggle.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', originalTheme ?? 'light');
+  });
+
+  test('alternância de tema claro/escuro é determinística', async ({ page }) => {
+    await page.goto('/');
+    const toggle = page.getByRole('switch', { name: /Alternar tema/ });
+    await expect(toggle).toBeVisible();
+    const originalTheme = await page.locator('html').getAttribute('data-theme');
+    await toggle.click();
+    await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(originalTheme);
+    await toggle.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', originalTheme ?? 'light');
   });
 
   test('B04 & B05: Catálogo, busca com debounce e ficha canônica do livro', async ({ page }) => {
@@ -29,22 +40,20 @@ test.describe('Bateria Completa de QA no Navegador (B01..B30 e Fluxos F01..F41)'
 
     // Ficha do livro
     const card = page.locator('.book-card').first();
-    if (await card.isVisible()) {
-      const href = await card.getAttribute('href');
-      if (href) {
-        await page.goto(href);
-        await expect(page.locator('.book-hero')).toBeVisible();
-        await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-        await expect(page.locator('.book-purchasing-panel, .book-purchasing-actions, .book-hero').first()).toBeVisible();
-      }
-    }
+    await expect(card).toBeVisible();
+    const href = await card.getAttribute('href');
+    expect(href).toBeTruthy();
+    await page.goto(href!);
+    await expect(page.locator('.book-hero')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.locator('.book-purchasing-panel, .book-purchasing-actions, .book-hero').first()).toBeVisible();
   });
 
   test('B06: Página de temporadas e cronograma', async ({ page }) => {
-    const res = await page.goto('/temporadas');
-    if (res?.status() === 200) {
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    }
+    const seasonSlug = process.env.QA_SEASON_SLUG || 'verity';
+    const res = await page.goto(`/temporadas/${seasonSlug}`);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
   test('B08 a B11: Superfícies de autenticação e recuperação de senha', async ({ page }) => {

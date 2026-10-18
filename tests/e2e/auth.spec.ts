@@ -32,10 +32,40 @@ test.describe('Autenticação e Feedback Contextual', () => {
   });
 
   test('bloqueia open redirect malicioso para domínios externos', async ({ page }) => {
+    await page.route('**/auth/v1/token*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          access_token: 'fake-access-token',
+          token_type: 'bearer',
+          expires_in: 3600,
+          refresh_token: 'fake-refresh-token',
+          user: {
+            id: 'qa-user-id',
+            aud: 'authenticated',
+            role: 'authenticated',
+            email: 'qa@diyspur.com',
+          },
+        }),
+      });
+    });
+
+    await page.route('**/perfil*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!DOCTYPE html><html><body><h1>Meu espaço</h1></body></html>',
+      });
+    });
+
     await page.goto('/entrar?redirect=https%3A%2F%2Fevil.example.com');
-    await expect(page.getByRole('button', { name: 'Entrar na comunidade' })).toBeVisible();
-    await page.goto('/entrar?redirect=%2F%2Fevil.example.com');
-    await expect(page.getByRole('button', { name: 'Entrar na comunidade' })).toBeVisible();
+    const origin = new URL(page.url()).origin;
+    await page.fill('input[name="email"]', 'qa@diyspur.com');
+    await page.fill('input[name="password"]', 'senha123456');
+    await page.getByRole('button', { name: 'Entrar na comunidade' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`^${origin}/perfil`));
   });
 
   test('tela de login exibe botão de esqueci minha senha e não possui magic link', async ({ page }) => {

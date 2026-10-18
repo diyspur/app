@@ -524,7 +524,7 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
     });
 
     it('applies exponential decay so recent interactions have higher influence than interactions from 30 days ago', async () => {
-      const { calculateDecayedWeight, saveBookInteraction, getStoredInteractions } = await import(
+      const { calculateDecayedWeight } = await import(
         '@/features/recommendations/browser-storage'
       );
       const now = 1_700_000_000_000;

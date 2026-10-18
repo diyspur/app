@@ -146,9 +146,11 @@ export function computeTensorFlowRecommendations(
     }
   }
 
-  if (interactionBooks.length > 0) {
-    const interactionWeight = opts.interactionWeight;
-    for (const b of interactionBooks) {
+  if (interactions.length > 0) {
+    for (let idx = 0; idx < interactions.length; idx++) {
+      const interaction = interactions[idx];
+      const b = interactionBooks[idx];
+      const interactionWeight = interaction.weight ?? opts.interactionWeight;
       const bookVec = vectorizeBook(b, vocab);
       for (let i = 0; i < featureDim; i++) {
         if (bookVec[i] > 0) {

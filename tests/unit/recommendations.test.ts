@@ -443,5 +443,182 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       expect(items[0].timestamp).toBe(200);
       expect(items[0].type).toBe('view');
     });
+
+    it('calculates decayed weights where click has higher weight than view (0.6 vs 0.2)', async () => {
+      const { calculateDecayedWeight } = await import(
+        '@/features/recommendations/browser-storage'
+      );
+      const now = 1_700_000_000_000;
+
+      const clickRecord = {
+        bookId: 'b-click',
+        slug: 'slug-click',
+        title: 'Click Book',
+        tags: ['tag1'],
+        author_id: 'auth-1',
+        clicksCount: 1,
+        viewsCount: 0,
+        lastInteractedAt: now,
+      };
+
+      const viewRecord = {
+        bookId: 'b-view',
+        slug: 'slug-view',
+        title: 'View Book',
+        tags: ['tag1'],
+        author_id: 'auth-1',
+        clicksCount: 0,
+        viewsCount: 1,
+        lastInteractedAt: now,
+      };
+
+      const clickWeight = calculateDecayedWeight(clickRecord, now);
+      const viewWeight = calculateDecayedWeight(viewRecord, now);
+
+      expect(clickWeight).toBeCloseTo(0.6, 5);
+      expect(viewWeight).toBeCloseTo(0.2, 5);
+      expect(clickWeight).toBeGreaterThan(viewWeight);
+    });
+
+    it('accumulates click and view signals without overwriting when viewing a previously clicked book', async () => {
+      const { saveBookInteraction, getStoredInteractions, getStoredRecords } = await import(
+        '@/features/recommendations/browser-storage'
+      );
+      const now = Date.now();
+      const t1 = now - 5000;
+      const t2 = now;
+
+      saveBookInteraction({
+        bookId: 'b-accumulate',
+        slug: 'slug-accumulate',
+        title: 'Accumulate Book',
+        tags: ['tag-shared'],
+        author_id: 'auth-1',
+        type: 'click',
+        timestamp: t1,
+      });
+
+      saveBookInteraction({
+        bookId: 'b-accumulate',
+        slug: 'slug-accumulate',
+        title: 'Accumulate Book',
+        tags: ['tag-shared'],
+        author_id: 'auth-1',
+        type: 'view',
+        timestamp: t2,
+      });
+
+      const records = getStoredRecords();
+      expect(records.length).toBe(1);
+      expect(records[0].bookId).toBe('b-accumulate');
+      expect(records[0].clicksCount).toBe(1);
+      expect(records[0].viewsCount).toBe(1);
+      expect(records[0].lastInteractedAt).toBe(t2);
+
+      const items = getStoredInteractions(now);
+      expect(items.length).toBe(1);
+      expect(items[0].bookId).toBe('b-accumulate');
+      // Weight should accumulate 0.6 + 0.2 = 0.8 (at t2)
+      expect(items[0].weight).toBeDefined();
+      expect(items[0].weight!).toBeGreaterThan(0.7);
+    });
+
+    it('applies exponential decay so recent interactions have higher influence than interactions from 30 days ago', async () => {
+      const { calculateDecayedWeight, saveBookInteraction, getStoredInteractions } = await import(
+        '@/features/recommendations/browser-storage'
+      );
+      const now = 1_700_000_000_000;
+      const dayMs = 86_400_000;
+      const thirtyDaysAgo = now - 30 * dayMs;
+      const fourteenDaysAgo = now - 14 * dayMs;
+
+      const recentRecord = {
+        bookId: 'b-recent',
+        slug: 'recent-book',
+        title: 'Recent Book',
+        tags: ['suspense'],
+        author_id: author1,
+        clicksCount: 1,
+        viewsCount: 0,
+        lastInteractedAt: now,
+      };
+
+      const halfLifeRecord = {
+        bookId: 'b-half-life',
+        slug: 'half-life-book',
+        title: 'Half Life Book',
+        tags: ['suspense'],
+        author_id: author1,
+        clicksCount: 1,
+        viewsCount: 0,
+        lastInteractedAt: fourteenDaysAgo,
+      };
+
+      const oldRecord = {
+        bookId: 'b-old',
+        slug: 'old-book',
+        title: 'Old Book',
+        tags: ['suspense'],
+        author_id: author1,
+        clicksCount: 1,
+        viewsCount: 0,
+        lastInteractedAt: thirtyDaysAgo,
+      };
+
+      const recentWeight = calculateDecayedWeight(recentRecord, now);
+      const halfLifeWeight = calculateDecayedWeight(halfLifeRecord, now);
+      const oldWeight = calculateDecayedWeight(oldRecord, now);
+
+      // Exact half life at 14 days should be half of 0.6 = 0.3
+      expect(recentWeight).toBeCloseTo(0.6, 5);
+      expect(halfLifeWeight).toBeCloseTo(0.3, 4);
+      expect(recentWeight).toBeGreaterThan(oldWeight);
+      expect(oldWeight).toBeLessThan(0.15);
+
+      // Verify influence on recommender ranking between two candidate books:
+      // candidateRecent shares features with recent interaction
+      // candidateOld shares features with old interaction
+      const candidateRecent = mockBook('c-recent', 'Recent Match', author1, ['suspense']);
+      const candidateOld = mockBook('c-old', 'Old Match', author3, ['terror']);
+
+      const { computeNativeRecommendations } = await import(
+        '@/features/recommendations/native-recommender'
+      );
+
+      const rankedScores = computeNativeRecommendations(
+        [candidateRecent, candidateOld],
+        [],
+        {
+          interactions: [
+            {
+              bookId: 'i-recent',
+              slug: 'i-recent',
+              title: 'Interacted Recent',
+              tags: ['suspense'],
+              author_id: author1,
+              timestamp: now,
+              type: 'click',
+              weight: recentWeight,
+            },
+            {
+              bookId: 'i-old',
+              slug: 'i-old',
+              title: 'Interacted Old',
+              tags: ['terror'],
+              author_id: author3,
+              timestamp: thirtyDaysAgo,
+              type: 'click',
+              weight: oldWeight,
+            },
+          ],
+        },
+      );
+
+      const scoreRecent = rankedScores.get(candidateRecent.id) ?? 0;
+      const scoreOld = rankedScores.get(candidateOld.id) ?? 0;
+
+      expect(scoreRecent).toBeGreaterThan(scoreOld);
+    });
   });
 });
+

@@ -59,6 +59,18 @@ export interface RecommendationOptions {
   interactions?: BookInteraction[];
 }
 
+export interface StoredInteractionRecord {
+  bookId: string;
+  slug: string;
+  title: string;
+  tags: string[];
+  author_id: string | null;
+  clicksCount: number;
+  viewsCount: number;
+  lastInteractedAt: number;
+  lastType?: 'click' | 'view';
+}
+
 export interface BookInteraction {
   bookId: string;
   slug: string;
@@ -67,6 +79,7 @@ export interface BookInteraction {
   author_id?: string | null;
   timestamp: number;
   type: 'click' | 'view';
+  weight?: number;
 }
 
 export type ScoredBook = Book & {

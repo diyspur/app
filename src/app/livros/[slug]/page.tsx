@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getBook } from '@/features/catalog/queries';
+import { BookCover } from '@/components/books/book-cover';
 import { ShareBookButton } from '@/components/books/share-book-button';
 import { BookReadingControl } from '@/components/books/book-reading-control';
 import { BookReadingStats } from '@/components/books/book-reading-stats';
@@ -88,20 +89,14 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
       <header className="book-hero">
         <div className="book-hero-grid">
           <div className="book-cover-wrap">
-            {book.cover_url ? (
-              <Image
-                alt={`Capa do livro ${book.title}`}
-                className="book-cover-image"
-                height={480}
-                priority
-                src={book.cover_url}
-                width={320}
-              />
-            ) : (
-              <div className="book-cover-placeholder" aria-label={`Capa indisponível para ${book.title}`}>
-                <span>{book.title}</span>
-              </div>
-            )}
+            <BookCover
+              src={book.cover_url}
+              title={book.title}
+              width={320}
+              height={480}
+              className="book-cover-image"
+              priority
+            />
           </div>
           <div className="book-hero-content">
             <span className="eyebrow">Clube de Leitura</span>

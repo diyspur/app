@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import type { Book } from '@/features/catalog/queries';
+import { BookCover } from '@/components/books/book-cover';
 
 export function BookCard({ book }: { book: Book }) {
   return (
@@ -10,19 +10,13 @@ export function BookCard({ book }: { book: Book }) {
       aria-label={`${book.title}, ${book.authors?.name ?? 'autor(a) desconhecido'}`}
     >
       <div className="book-card-cover">
-        {book.cover_url ? (
-          <Image
-            src={book.cover_url}
-            alt={`Capa de ${book.title}`}
-            width={300}
-            height={450}
-            sizes="(max-width: 768px) 100vw, 300px"
-            loading="lazy"
-            decoding="async"
-          />
-        ) : (
-          <span className="book-card-title-cover">{book.title}</span>
-        )}
+        <BookCover
+          src={book.cover_url}
+          title={book.title}
+          width={300}
+          height={450}
+          sizes="(max-width: 768px) 100vw, 300px"
+        />
       </div>
       <h3>{book.title}</h3>
       <p>{book.authors?.name ?? 'Autor(a) convidado(a)'}</p>

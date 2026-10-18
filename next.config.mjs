@@ -14,7 +14,7 @@ const securityHeaders = [
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      "img-src 'self' data: blob: https://*.supabase.co https://www.record.com.br https://*.record.com.br https://m.media-amazon.com https://images-na.ssl-images-amazon.com https://*.amazon.com.br https://*.amazon.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://www.record.com.br https://*.record.com.br https://m.media-amazon.com https://images-na.ssl-images-amazon.com https://*.amazon.com.br https://*.amazon.com https://covers.openlibrary.org",
       "font-src 'self' data: https://fonts.gstatic.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -40,6 +40,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'm.media-amazon.com' },
       { protocol: 'https', hostname: '**.amazon.com.br' },
       { protocol: 'https', hostname: '**.amazon.com' },
+      { protocol: 'https', hostname: 'covers.openlibrary.org' },
     ],
   },
   async headers() {

@@ -1,0 +1,256 @@
+import { describe, it, expect } from 'vitest';
+import {
+  sanitizePayload,
+  redactSensitiveHeaders,
+  sanitizeError,
+} from '../../src/lib/observability/redaction';
+
+describe('Telemetry Redaction & Sanitization Engine (LGPD)', () => {
+  describe('redactSensitiveHeaders', () => {
+    it('redige headers sensíveis em Record<string, string> independente de caixa', () => {
+      const headers = {
+        'Authorization': 'Bearer secret-jwt-token-12345',
+        'Cookie': 'session_id=xyz987; token=abc',
+        'Set-Cookie': 'secret=123',
+        'X-Api-Key': 'key-live-99999',
+        'x-auth-token': 'auth-xyz',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+      };
+
+      const redacted = redactSensitiveHeaders(headers);
+
+      expect(redacted['authorization']).toBe('[REDACTED]');
+      expect(redacted['cookie']).toBe('[REDACTED]');
+      expect(redacted['set-cookie']).toBe('[REDACTED]');
+      expect(redacted['x-api-key']).toBe('[REDACTED]');
+      expect(redacted['x-auth-token']).toBe('[REDACTED]');
+      expect(redacted['content-type']).toBe('application/json');
+      expect(redacted['user-agent']).toBe('Mozilla/5.0');
+    });
+
+    it('redige headers sensíveis a partir de instância web padrão Headers', () => {
+      const headers = new Headers();
+      headers.set('authorization', 'Bearer my-token');
+      headers.set('cookie', 'token=123');
+      headers.set('accept', 'application/json');
+
+      const redacted = redactSensitiveHeaders(headers);
+
+      expect(redacted['authorization']).toBe('[REDACTED]');
+      expect(redacted['cookie']).toBe('[REDACTED]');
+      expect(redacted['accept']).toBe('application/json');
+    });
+
+    it('lida com entradas nulas ou vazias de forma segura', () => {
+      expect(redactSensitiveHeaders({} as Record<string, string>)).toEqual({});
+      expect(redactSensitiveHeaders(null)).toEqual({});
+      expect(redactSensitiveHeaders(undefined)).toEqual({});
+    });
+  });
+
+  describe('sanitizePayload', () => {
+    it('redige chaves de objetos sensíveis por blocklist', () => {
+      const payload = {
+        username: 'alice',
+        password: 'my-super-secret-password',
+        secret: 'shhh',
+        token: 'eyJhbGciOi...',
+        apiKey: 'sk-live-123',
+        creditCard: '4532 0151 1283 0366',
+        cvv: '123',
+        cpf: '123.456.789-00',
+        refreshToken: 'token-abc',
+        publicNote: 'tudo certo',
+      };
+
+      const sanitized = sanitizePayload(payload);
+
+      expect(sanitized.username).toBe('alice');
+      expect(sanitized.password).toBe('[REDACTED]');
+      expect(sanitized.secret).toBe('[REDACTED]');
+      expect(sanitized.token).toBe('[REDACTED]');
+      expect(sanitized.apiKey).toBe('[REDACTED]');
+      expect(sanitized.creditCard).toBe('[REDACTED]');
+      expect(sanitized.cvv).toBe('[REDACTED]');
+      expect(sanitized.cpf).toBe('[REDACTED]');
+      expect(sanitized.refreshToken).toBe('[REDACTED]');
+      expect(sanitized.publicNote).toBe('tudo certo');
+    });
+
+    it('redige tokens Bearer dentro de strings', () => {
+      const input = 'Authorization header was Bearer eyJhbGciOiJIUzI1NiJ9.test.sig failed';
+      const output = sanitizePayload(input);
+      expect(output).not.toContain('eyJhbGciOiJIUzI1NiJ9.test.sig');
+      expect(output).toContain('Bearer [REDACTED]');
+    });
+
+    it('redige JWTs dentro de strings arbitrárias', () => {
+      const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      const input = { message: `Falha com token: ${jwt}` };
+      const output = sanitizePayload(input);
+      expect(output.message).not.toContain(jwt);
+      expect(output.message).toContain('[REDACTED]');
+    });
+
+    it('redige números de cartão de crédito no formato com traços ou espaços', () => {
+      const input = {
+        cardWithSpaces: '4532 0151 1283 0366',
+        cardWithDashes: '5412-7512-3412-3456',
+        cardPlain: '4111111111111111',
+      };
+      const output = sanitizePayload(input);
+      expect(output.cardWithSpaces).toBe('[REDACTED]');
+      expect(output.cardWithDashes).toBe('[REDACTED]');
+      expect(output.cardPlain).toBe('[REDACTED]');
+    });
+
+    it('redige CPFs formatados no padrão brasileiro', () => {
+      const input = 'O CPF do cliente é 123.456.789-01 no cadastro';
+      const output = sanitizePayload(input);
+      expect(output).not.toContain('123.456.789-01');
+      expect(output).toContain('[REDACTED]');
+    });
+
+    it('mascara e-mails preservando formato anonimizado', () => {
+      const input = {
+        contact: 'usuario.leitor@diyspur.com.br',
+        simple: 'user@example.com',
+      };
+      const output = sanitizePayload(input);
+      expect(output.contact).toMatch(/^u\*\*\*@\*\*\*\.com\.br$/);
+      expect(output.simple).toMatch(/^u\*\*\*@\*\*\*\.com$/);
+    });
+
+    it('saneia parâmetros sensíveis em URLs e query strings', () => {
+      const url = 'https://api.diyspur.com/auth/callback?token=secret123&code=auth456&state=xyz&page=1';
+      const sanitized = sanitizePayload(url);
+      expect(sanitized).not.toContain('secret123');
+      expect(sanitized).not.toContain('auth456');
+      expect(sanitized).toContain('token=%5BREDACTED%5D');
+      expect(sanitized).toContain('code=%5BREDACTED%5D');
+      expect(sanitized).toContain('page=1');
+    });
+
+    it('trunca strings longas em no máximo 250 caracteres', () => {
+      const longString = 'a'.repeat(400);
+      const sanitized = sanitizePayload(longString);
+      expect(sanitized.length).toBe(250);
+      expect(sanitized).toBe('a'.repeat(250));
+    });
+
+    it('sanitiza recursivamente objetos aninhados e arrays', () => {
+      const complex = {
+        users: [
+          { name: 'Bob', email: 'bob@example.com', token: 'secret-1' },
+          { name: 'Carol', email: 'carol@test.org', token: 'secret-2' },
+        ],
+        meta: {
+          config: {
+            apiKey: 'super-key',
+            active: true,
+            score: 42,
+          },
+        },
+      };
+
+      const sanitized = sanitizePayload(complex);
+
+      expect(sanitized.users[0]?.email).toMatch(/^b\*\*\*@\*\*\*\.com$/);
+      expect(sanitized.users[0]?.token).toBe('[REDACTED]');
+      expect(sanitized.users[1]?.email).toMatch(/^c\*\*\*@\*\*\*\.org$/);
+      expect(sanitized.users[1]?.token).toBe('[REDACTED]');
+      expect(sanitized.meta.config.apiKey).toBe('[REDACTED]');
+      expect(sanitized.meta.config.score).toBe(42);
+      expect(sanitized.meta.config.active).toBe(true);
+    });
+
+    it('protege contra referências circulares sem estourar a pilha', () => {
+      const circularObj: Record<string, unknown> = {
+        name: 'circulo',
+        safe: true,
+      };
+      circularObj.self = circularObj;
+
+      const sanitized = sanitizePayload(circularObj);
+      expect(sanitized.name).toBe('circulo');
+      expect(sanitized.safe).toBe(true);
+      expect(sanitized.self).toBe('[CIRCULAR]');
+    });
+
+    it('interrompe recursão profunda com segurança ao atingir profundidade máxima', () => {
+      let current: Record<string, unknown> = {};
+      const root = current;
+      for (let i = 0; i < 20; i++) {
+        const next: Record<string, unknown> = {};
+        current.child = next;
+        current = next;
+      }
+
+      const sanitized = sanitizePayload(root);
+      expect(sanitized).toBeDefined();
+    });
+
+    it('trata valores primitivos e tipos especiais sem quebrar', () => {
+      expect(sanitizePayload(null)).toBeNull();
+      expect(sanitizePayload(undefined)).toBeUndefined();
+      expect(sanitizePayload(123)).toBe(123);
+      expect(sanitizePayload(true)).toBe(true);
+      const date = new Date('2026-01-01T00:00:00Z');
+      expect(sanitizePayload(date)).toEqual(date);
+    });
+  });
+
+  describe('sanitizeError', () => {
+    it('sanitiza instâncias padrão de Error removendo PII de mensagem e stack', () => {
+      const error = new Error('Falha ao autenticar usuário joao@exemplo.com com token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.sig123');
+      error.stack = `Error: Falha ao autenticar\n    at login (/app/auth.ts:10:5?secret=abc12345)`;
+
+      const sanitized = sanitizeError(error);
+
+      expect(sanitized.name).toBe('Error');
+      expect(sanitized.message).not.toContain('joao@exemplo.com');
+      expect(sanitized.message).not.toContain('eyJhbGciOi');
+      expect(typeof sanitized.message).toBe('string');
+      expect(sanitized.stack).toBeDefined();
+      expect(sanitized.stack).not.toContain('secret=abc12345');
+    });
+
+    it('sanitiza propriedades customizadas adicionadas ao Error', () => {
+      const error = new Error('Database connection failed') as Error & {
+        apiKey?: string;
+        connectionString?: string;
+        code?: string;
+      };
+      error.apiKey = 'live-key-999';
+      error.connectionString = 'postgres://admin:superpassword@localhost:5432/db';
+      error.code = 'ECONNREFUSED';
+
+      const sanitized = sanitizeError(error);
+
+      expect(sanitized.apiKey).toBe('[REDACTED]');
+      expect(sanitized.connectionString).not.toContain('superpassword');
+      expect(sanitized.code).toBe('ECONNREFUSED');
+    });
+
+    it('trata erros que são strings ou objetos literais', () => {
+      const stringError = sanitizeError('Erro com token abc-secret-123 e senha secret!');
+      expect(stringError.message).toBeDefined();
+
+      const objectError = sanitizeError({
+        code: 500,
+        secretKey: 'top-secret',
+        detail: 'Falha no pagamento',
+      });
+      expect(objectError.code).toBe(500);
+      expect(objectError.secretKey).toBe('[REDACTED]');
+      expect(objectError.detail).toBe('Falha no pagamento');
+    });
+
+    it('nunca lança exceção em entradas nulas ou indefinidas', () => {
+      expect(() => sanitizeError(null)).not.toThrow();
+      expect(() => sanitizeError(undefined)).not.toThrow();
+      expect(sanitizeError(null)).toEqual({ message: 'Unknown error' });
+    });
+  });
+});

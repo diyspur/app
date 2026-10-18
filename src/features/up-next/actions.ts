@@ -41,3 +41,22 @@ export async function removeFromUpNext(bookId: string) {
   revalidatePath('/minha-fila');
   return { ok: true, message: 'Livro removido da sua fila.' };
 }
+
+const reorderSchema = z.array(z.string().uuid()).max(100);
+
+export async function reorderUpNext(bookIds: string[]) {
+  if (isReadOnlyPreview()) return { ok: false, message: READ_ONLY_PREVIEW_MESSAGE };
+  const parsed = reorderSchema.safeParse(bookIds);
+  if (!parsed.success) return { ok: false, message: 'Ordem de livros inválida.' };
+  const session = await requireSession();
+  if (!session) return { ok: false, message: 'Entre para alterar a ordem da sua fila.' };
+
+  const { error } = await session.client.rpc('reorder_up_next', {
+    p_book_ids: parsed.data,
+  });
+
+  if (error) return { ok: false, ...mapDatabaseError(error.code) };
+  revalidatePath('/minha-fila');
+  return { ok: true, message: 'Fila reorganizada com sucesso.' };
+}
+

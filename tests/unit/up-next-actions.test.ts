@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { addToUpNext, removeFromUpNext } from '@/features/up-next/actions';
+import { addToUpNext, removeFromUpNext, reorderUpNext } from '@/features/up-next/actions';
 import * as sessionModule from '@/lib/auth/session';
 
 vi.mock('next/cache', () => ({
@@ -62,5 +62,33 @@ describe('up-next actions (QA-06 continuous playlist)', () => {
     const res = await removeFromUpNext('550e8400-e29b-41d4-a716-446655440000');
     expect(res.ok).toBe(true);
     expect(res.message).toBe('Livro removido da sua fila.');
+  });
+
+  it('rejects invalid uuid array on reorderUpNext', async () => {
+    const res = await reorderUpNext(['not-a-uuid']);
+    expect(res.ok).toBe(false);
+    expect(res.message).toBe('Ordem de livros inválida.');
+  });
+
+  it('successfully calls reorder_up_next RPC with valid uuid array', async () => {
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: true,
+      error: null,
+    });
+    vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
+      userId: 'user-1',
+      client: { rpc: rpcMock } as any,
+    } as any);
+
+    const bookIds = [
+      '550e8400-e29b-41d4-a716-446655440001',
+      '550e8400-e29b-41d4-a716-446655440002',
+    ];
+    const res = await reorderUpNext(bookIds);
+    expect(res.ok).toBe(true);
+    expect(res.message).toBe('Fila reorganizada com sucesso.');
+    expect(rpcMock).toHaveBeenCalledWith('reorder_up_next', {
+      p_book_ids: bookIds,
+    });
   });
 });

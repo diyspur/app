@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/session';
 import { getUserUpNext } from '@/features/up-next/queries';
-import { RemoveQueueButton } from '@/components/up-next/remove-queue-button';
+import { QueueManagement } from '@/components/up-next/queue-management';
 
 export const metadata: Metadata = {
   title: 'Minha fila de leitura',
@@ -42,45 +42,7 @@ export default async function UpNextPage() {
           </div>
         </div>
 
-        {items.length ? (
-          <div className="timeline">
-            {items.map((item, index) => {
-              const book = item.book;
-              if (!book) return null;
-              return (
-                <article className="member-card" key={item.book_id}>
-                  <div className="section-head">
-                    <div>
-                      <span className="eyebrow">Posição #{index + 1}</span>
-                      <h3>
-                        <Link href={`/livros/${book.slug}`} className="text-link">
-                          {book.title}
-                        </Link>
-                      </h3>
-                    </div>
-                    <RemoveQueueButton bookId={book.id} />
-                  </div>
-                  {book.synopsis && <p style={{ marginTop: '8px' }}>{book.synopsis}</p>}
-                  <p className="field-hint" style={{ marginTop: '12px' }}>
-                    {book.total_pages ? `${book.total_pages} páginas` : 'Páginas não informadas'} · Adicionado em{' '}
-                    {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(item.added_at))}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-state-mark" aria-hidden="true">📚</div>
-            <h2>Sua fila está vazia</h2>
-            <p>Navegue pelo catálogo e escolha as histórias que você quer ler a seguir.</p>
-            <div className="empty-actions">
-              <Link className="button button-small" href="/livros">
-                Descobrir livros
-              </Link>
-            </div>
-          </div>
-        )}
+        <QueueManagement initialItems={items} />
       </section>
     </section>
   );

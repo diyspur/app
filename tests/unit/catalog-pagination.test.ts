@@ -406,5 +406,325 @@ describe('Catalog Deep Pagination (> 500 books)', () => {
   });
 });
 
+describe('Recommender Session Cache (recommender-cache.ts)', () => {
+  beforeEach(async () => {
+    const { clearRecommenderCache } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+    clearRecommenderCache();
+  });
+
+  it('stores and retrieves ranked book ids and total count', async () => {
+    const { getCachedRanking, setCachedRanking } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+
+    expect(getCachedRanking('user-1:__all__')).toBeNull();
+
+    setCachedRanking('user-1:__all__', ['b-1', 'b-2', 'b-3'], 3);
+
+    const cached = getCachedRanking('user-1:__all__');
+    expect(cached).not.toBeNull();
+    expect(cached?.rankedBookIds).toEqual(['b-1', 'b-2', 'b-3']);
+    expect(cached?.total).toBe(3);
+  });
+
+  it('expires cache entries after ttl has passed', async () => {
+    const { getCachedRanking, setCachedRanking } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+
+    setCachedRanking('user-temp:__all__', ['b-1'], 1, 50);
+    expect(getCachedRanking('user-temp:__all__')).not.toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(getCachedRanking('user-temp:__all__')).toBeNull();
+  });
+
+  it('invalidates all ranking keys for a specific user without affecting others', async () => {
+    const { getCachedRanking, setCachedRanking, invalidateUserRanking } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+
+    setCachedRanking('user-alpha:__all__', ['b-1', 'b-2'], 2);
+    setCachedRanking('user-alpha:fantasia', ['b-1'], 1);
+    setCachedRanking('user-beta:__all__', ['b-3', 'b-4'], 2);
+
+    invalidateUserRanking('user-alpha');
+
+    expect(getCachedRanking('user-alpha:__all__')).toBeNull();
+    expect(getCachedRanking('user-alpha:fantasia')).toBeNull();
+    expect(getCachedRanking('user-beta:__all__')).not.toBeNull();
+  });
+
+  it('clears all entries when clearRecommenderCache is called', async () => {
+    const { getCachedRanking, setCachedRanking, clearRecommenderCache, getRecommenderCacheSize } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+
+    setCachedRanking('u1:q1', ['b-1'], 1);
+    setCachedRanking('u2:q2', ['b-2'], 1);
+    expect(getRecommenderCacheSize()).toBe(2);
+
+    clearRecommenderCache();
+    expect(getRecommenderCacheSize()).toBe(0);
+    expect(getCachedRanking('u1:q1')).toBeNull();
+  });
+});
+
+describe('Catalog Queries Session Cache Integration', () => {
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    const { clearRecommenderCache } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+    clearRecommenderCache();
+  });
+
+  it('reuses cached ranking on subsequent page requests and skips candidate re-querying', async () => {
+    const clientsModule = await import('@/lib/supabase/clients');
+    let candidateQueryCount = 0;
+    let fullQueryCount = 0;
+
+    const mockCandidateBooks = Array.from({ length: 48 }, (_, i) => ({
+      id: `book-${i + 1}`,
+      author_id: `author-${(i % 5) + 1}`,
+      tags: ['ficcao'],
+      title: `Book ${i + 1}`,
+    }));
+
+    const supabaseMock = {
+      auth: {
+        getClaims: vi.fn().mockResolvedValue({
+          data: { claims: { sub: 'reader-cache-test' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'user_book_readings') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [{ book_id: 'book-1', status: 'read' }],
+                error: null,
+              }),
+            }),
+          };
+        }
+
+        if (table === 'authors') {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockImplementation((_field: string, ids: string[]) =>
+                Promise.resolve({
+                  data: ids.map((id) => ({ id, name: `Author ${id}` })),
+                  error: null,
+                })
+              ),
+            }),
+          };
+        }
+
+        if (table === 'books') {
+          let inIds: string[] | null = null;
+          let selectedFields = '';
+
+          const builder: any = {
+            select: vi.fn((fields: string) => {
+              selectedFields = fields;
+              return builder;
+            }),
+            order: vi.fn().mockReturnThis(),
+            ilike: vi.fn().mockReturnThis(),
+            in: vi.fn((_field: string, ids: string[]) => {
+              inIds = ids;
+              return builder;
+            }),
+            then: (resolve: (val: any) => void) => {
+              if (selectedFields.includes('synopsis')) {
+                fullQueryCount++;
+                const hydrated = (inIds ?? []).map((id) => ({
+                  id,
+                  title: `Hydrated ${id}`,
+                  slug: id,
+                  author_id: 'author-1',
+                  cover_url: null,
+                  tags: ['ficcao'],
+                }));
+                return Promise.resolve({ data: hydrated, error: null }).then(resolve);
+              }
+
+              if (inIds) {
+                // history ids query (id,author_id,tags)
+                return Promise.resolve({
+                  data: [{ id: 'book-1', author_id: 'author-1', tags: ['ficcao'] }],
+                  error: null,
+                }).then(resolve);
+              }
+
+              // Candidate query
+              candidateQueryCount++;
+              return Promise.resolve({
+                data: mockCandidateBooks,
+                count: 48,
+                error: null,
+              }).then(resolve);
+            },
+          };
+          return builder;
+        }
+
+        return {};
+      }),
+    };
+
+    vi.spyOn(clientsModule, 'createServerSupabase').mockResolvedValue(supabaseMock as any);
+
+    const { getBooksResult } = await import('@/features/catalog/queries');
+
+    // Page 1: Cache Miss -> runs candidate query (1) + full query (1)
+    const page1 = await getBooksResult(undefined, 1, 24);
+    expect(page1.ok).toBe(true);
+    expect(candidateQueryCount).toBe(1);
+    expect(fullQueryCount).toBe(1);
+    if (!page1.ok) throw new Error('Page 1 failed');
+    expect(page1.data.books.length).toBe(24);
+    expect(page1.data.page).toBe(1);
+
+    // Page 2: Cache Hit -> candidate query is NOT executed again! candidateQueryCount stays 1!
+    const page2 = await getBooksResult(undefined, 2, 24);
+    expect(page2.ok).toBe(true);
+    expect(candidateQueryCount).toBe(1); // SKIPPED candidate re-query!
+    expect(fullQueryCount).toBe(2); // Hydrated second page
+    if (!page2.ok) throw new Error('Page 2 failed');
+    expect(page2.data.books.length).toBe(24);
+    expect(page2.data.page).toBe(2);
+
+    // Invalidate user ranking
+    const { invalidateUserRanking } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+    invalidateUserRanking('reader-cache-test');
+
+    // Next request triggers candidate re-query
+    const page1AfterInvalidation = await getBooksResult('novo-termo', 1, 24);
+    expect(page1AfterInvalidation.ok).toBe(true);
+    expect(candidateQueryCount).toBe(2); // re-queried!
+  });
+});
+
+describe('Catalog API Route Handler (GET /api/books/catalog)', () => {
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    const { clearRecommenderCache } = await import(
+      '@/features/recommendations/recommender-cache'
+    );
+    clearRecommenderCache();
+  });
+
+  it('returns HTTP 200 with catalog data and Cache-Control headers', async () => {
+    const clientsModule = await import('@/lib/supabase/clients');
+    const { GET } = await import('@/app/api/books/catalog/route');
+    const { NextRequest } = await import('next/server');
+
+    const supabaseMock = {
+      auth: {
+        getClaims: vi.fn().mockResolvedValue({
+          data: { claims: null },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'authors') {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          };
+        }
+        if (table === 'books') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            range: vi.fn().mockReturnThis(),
+            then: (resolve: (val: any) => void) =>
+              Promise.resolve({
+                data: [{ id: 'b-1', title: 'Livro Teste', author_id: 'a-1' }],
+                count: 1,
+                error: null,
+              }).then(resolve),
+          };
+        }
+        return {};
+      }),
+    };
+
+    vi.spyOn(clientsModule, 'createServerSupabase').mockResolvedValue(supabaseMock as any);
+
+    const request = new NextRequest('http://localhost:3000/api/books/catalog?page=1&limit=24');
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe(
+      'private, max-age=60, stale-while-revalidate=120'
+    );
+
+    const json = await response.json();
+    expect(json.total).toBe(1);
+    expect(json.page).toBe(1);
+    expect(json.books.length).toBe(1);
+    expect(json.books[0].id).toBe('b-1');
+  });
+
+  it('clamps invalid and boundary pagination query parameters', async () => {
+    const queriesModule = await import('@/features/catalog/queries');
+    const getBooksResultSpy = vi
+      .spyOn(queriesModule, 'getBooksResult')
+      .mockResolvedValue({
+        ok: true,
+        data: {
+          books: [],
+          total: 0,
+          page: 1,
+          totalPages: 1,
+          isPersonalized: false,
+        },
+      });
+
+    const { GET } = await import('@/app/api/books/catalog/route');
+    const { NextRequest } = await import('next/server');
+
+    // Negative page and excessive limit (> 48)
+    const request1 = new NextRequest('http://localhost:3000/api/books/catalog?page=-5&limit=100&q=teste');
+    await GET(request1);
+    expect(getBooksResultSpy).toHaveBeenLastCalledWith('teste', 1, 48);
+
+    // Non-numeric params
+    const request2 = new NextRequest('http://localhost:3000/api/books/catalog?page=abc&limit=xyz');
+    await GET(request2);
+    expect(getBooksResultSpy).toHaveBeenLastCalledWith('', 1, 24);
+  });
+
+  it('returns HTTP 500 when getBooksResult fails', async () => {
+    const queriesModule = await import('@/features/catalog/queries');
+    vi.spyOn(queriesModule, 'getBooksResult').mockResolvedValue({
+      ok: false,
+      code: 'unavailable',
+      message: 'Catálogo indisponível temporariamente',
+    });
+
+    const { GET } = await import('@/app/api/books/catalog/route');
+    const { NextRequest } = await import('next/server');
+
+    const request = new NextRequest('http://localhost:3000/api/books/catalog');
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json.error).toBe('Catálogo indisponível temporariamente');
+  });
+});
+
+
 
 

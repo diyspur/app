@@ -202,6 +202,20 @@ describe('Telemetry Redaction & Sanitization Engine (LGPD)', () => {
   });
 
   describe('sanitizeError', () => {
+    it('redige PII e credenciais na primeira linha e em todo o stack trace de Error', () => {
+      const error = new Error('Falha com email dev@diyspur.com.br, cpf 111.222.333-44 e cartao 4532 0151 1283 0366');
+      error.stack = `Error: Falha com email dev@diyspur.com.br, cpf 111.222.333-44 e cartao 4532 0151 1283 0366\n    at connect (postgres://admin:topsecret@db.internal:5432/diyspur)\n    at fetch (/api?api_key=sk-12345)`;
+
+      const sanitized = sanitizeError(error);
+
+      expect(sanitized.stack).not.toContain('dev@diyspur.com.br');
+      expect(sanitized.stack).toContain('d***@***.com.br');
+      expect(sanitized.stack).not.toContain('111.222.333-44');
+      expect(sanitized.stack).not.toContain('4532 0151 1283 0366');
+      expect(sanitized.stack).not.toContain('topsecret');
+      expect(sanitized.stack).not.toContain('sk-12345');
+    });
+
     it('sanitiza instâncias padrão de Error removendo PII de mensagem e stack', () => {
       const error = new Error('Falha ao autenticar usuário joao@exemplo.com com token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.sig123');
       error.stack = `Error: Falha ao autenticar\n    at login (/app/auth.ts:10:5?secret=abc12345)`;
@@ -251,6 +265,72 @@ describe('Telemetry Redaction & Sanitization Engine (LGPD)', () => {
       expect(() => sanitizeError(null)).not.toThrow();
       expect(() => sanitizeError(undefined)).not.toThrow();
       expect(sanitizeError(null)).toEqual({ message: 'Unknown error' });
+    });
+  });
+
+  describe('Review Findings (Fix Round 1)', () => {
+    it('redige propriedades com CPF mesmo quando compostas no nome', () => {
+      const payload = {
+        user_cpf_number: '12345678901',
+        client_cpf_digits: '98765432100',
+      };
+      const sanitized = sanitizePayload(payload);
+      expect(sanitized.user_cpf_number).toBe('[REDACTED]');
+      expect(sanitized.client_cpf_digits).toBe('[REDACTED]');
+    });
+
+    it('redige chaves em português como senha e cartao (com ou sem acento)', () => {
+      const payload = {
+        senha: 'minha-senha-secreta',
+        minha_senha: '123',
+        cartao: '1234567890123456',
+        numero_cartao: '9999888877776666',
+        cartão_de_credito: '4111',
+      };
+      const sanitized = sanitizePayload(payload);
+      expect(sanitized.senha).toBe('[REDACTED]');
+      expect(sanitized.minha_senha).toBe('[REDACTED]');
+      expect(sanitized.cartao).toBe('[REDACTED]');
+      expect(sanitized.numero_cartao).toBe('[REDACTED]');
+      expect(sanitized.cartão_de_credito).toBe('[REDACTED]');
+    });
+
+    it('saneia parâmetros de query string com prefixos como api_key e access_token', () => {
+      const url = 'https://api.diyspur.com/v1?api_key=secret-key-123&client_secret=456&access_token=jwt789&safe_param=ok';
+      const sanitized = sanitizePayload(url);
+      expect(sanitized).not.toContain('secret-key-123');
+      expect(sanitized).not.toContain('456');
+      expect(sanitized).not.toContain('jwt789');
+      expect(sanitized).toContain('safe_param=ok');
+    });
+
+    it('redige cartões Amex no formato 4-6-5 dígitos', () => {
+      const input = {
+        amexSpaces: '3400 123456 78901',
+        amexDashes: '3700-123456-78901',
+      };
+      const output = sanitizePayload(input);
+      expect(output.amexSpaces).toBe('[REDACTED]');
+      expect(output.amexDashes).toBe('[REDACTED]');
+    });
+
+    it('delega para sanitizeError quando sanitizePayload recebe instância de Error', () => {
+      const err = new Error('Falha de auth com token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig');
+      const sanitized = sanitizePayload(err) as unknown as Record<string, unknown>;
+      expect(sanitized.name).toBe('Error');
+      expect(sanitized.message).not.toContain('eyJhbGciOi');
+      expect(sanitized.message).toContain('[REDACTED]');
+      expect(sanitized.stack).toBeDefined();
+    });
+
+    it('adota política fail-closed retornando marcador seguro se ocorrer erro inesperado', () => {
+      const buggyObj = {
+        get broken() {
+          throw new Error('Explosão no getter');
+        },
+      };
+      const sanitized = sanitizePayload(buggyObj);
+      expect(sanitized).toEqual({ unredacted: '[UNSANITIZED_DATA]' });
     });
   });
 });

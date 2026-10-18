@@ -6,7 +6,7 @@
  * traces, payloads de telemetria ou relatórios de erro.
  *
  * Regras estritas:
- * - Fail-safe: nunca lançar exceções para não interromper a aplicação.
+ * - Fail-closed: nunca vazar dados não sanitizados em caso de exceção inesperada.
  * - Proteção de ciclos (referências circulares).
  * - Profundidade máxima de recursão (limite de pilha).
  * - Truncamento de strings em no máximo 250 caracteres.
@@ -18,20 +18,26 @@ const MAX_RECURSION_DEPTH = 12;
 // Expressões regulares pré-compiladas para alta performance
 const BEARER_REGEX = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
 const JWT_REGEX = /\beyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\b/g;
-const CREDIT_CARD_REGEX = /\b(?:\d{4}[ -]){3}\d{4}\b|\b\d{15,19}\b/g;
+// Suporta 16 dígitos padrão, Amex 4-6-5 dígitos e sequências contínuas de 13 a 19 dígitos
+const CREDIT_CARD_REGEX = /\b(?:\d{4}[ -]){3}\d{4}\b|\b\d{4}[ -]\d{6}[ -]\d{5}\b|\b\d{13,19}\b/g;
 const CPF_FORMATTED_REGEX = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g;
 const EMAIL_REGEX = /\b([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g;
-const QUERY_PARAM_SECRET_REGEX = /([?&](?:token|auth|key|secret|password|code|credential|signature|session|access_token|refresh_token)=)[^&#\s]+/gi;
+// Captura qualquer parâmetro contendo palavras-chave sensíveis inclusive com prefixos (ex: api_key, access_token)
+const QUERY_PARAM_SECRET_REGEX = /([?&][^=&#\s]*(?:token|auth|key|secret|password|senha|code|credential|signature|session|cartao)[^=&#\s]*=)[^&#\s]+/gi;
 const URI_CREDENTIALS_REGEX = /(:\/\/[^/@\s]*:)([^@\s]+)(@)/gi;
 
 /**
  * Avalia se o nome da chave de um objeto denota informação confidencial ou PII.
- * Ignora nomes benignos do domínio como "author" (autor de livro).
+ * Suporta termos em inglês e português (LGPD) e ignora nomes benignos do domínio como "author".
  */
 export function isSensitiveKey(key: string): boolean {
   if (!key || typeof key !== 'string') return false;
 
-  const normalized = key.toLowerCase().replace(/[-_]/g, '');
+  const normalized = key
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_]/g, '');
 
   // Exceção de domínio: autores de livros no clube de leitura não são credenciais
   if (
@@ -44,16 +50,16 @@ export function isSensitiveKey(key: string): boolean {
 
   return (
     normalized.includes('password') ||
+    normalized.includes('senha') ||
     normalized.includes('secret') ||
     normalized.includes('token') ||
     normalized.includes('apikey') ||
     normalized.includes('creditcard') ||
     normalized.includes('cardnumber') ||
+    normalized.includes('cartao') ||
     normalized.includes('cvv') ||
     normalized.includes('cvc') ||
-    normalized === 'cpf' ||
-    normalized.endsWith('cpf') ||
-    normalized.startsWith('cpf') ||
+    normalized.includes('cpf') ||
     normalized === 'auth' ||
     normalized.includes('authorization') ||
     normalized.includes('cookie') ||
@@ -66,17 +72,24 @@ export function isSensitiveKey(key: string): boolean {
  * Avalia se um parâmetro de query string contém segredos ou credenciais.
  */
 function isSensitiveQueryParam(param: string): boolean {
-  const norm = param.toLowerCase();
+  const norm = param
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_]/g, '');
+
   return (
     norm.includes('token') ||
     norm.includes('secret') ||
     norm.includes('auth') ||
     norm.includes('password') ||
+    norm.includes('senha') ||
     norm.includes('key') ||
     norm.includes('code') ||
     norm.includes('credential') ||
     norm.includes('signature') ||
-    norm.includes('session')
+    norm.includes('session') ||
+    norm.includes('cartao')
   );
 }
 
@@ -129,10 +142,13 @@ function sanitizeUrlString(value: string): string {
 }
 
 /**
- * Sanitiza o conteúdo de uma string, aplicando redaction de PII e truncamento seguro.
+ * Aplica todas as regras e expressões de redação de PII e segredos ao texto sem truncamento de comprimento.
+ * Utilizado de forma compartilhada para mensagens, stack traces e strings.
  */
-function sanitizeString(str: string): string {
-  let result = str;
+export function redactPiiText(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+
+  let result = text;
 
   // 1. Redação de JWTs
   result = result.replace(JWT_REGEX, '[REDACTED]');
@@ -140,7 +156,7 @@ function sanitizeString(str: string): string {
   // 2. Redação de Bearer Tokens
   result = result.replace(BEARER_REGEX, 'Bearer [REDACTED]');
 
-  // 3. Redação de Cartões de Crédito
+  // 3. Redação de Cartões de Crédito (inclusive Amex 4-6-5)
   result = result.replace(CREDIT_CARD_REGEX, '[REDACTED]');
 
   // 4. Redação de CPFs formatados
@@ -155,7 +171,16 @@ function sanitizeString(str: string): string {
   // 7. Sanitização de Query Strings em URLs
   result = sanitizeUrlString(result);
 
-  // 8. Truncamento seguro para no máximo 250 caracteres
+  return result;
+}
+
+/**
+ * Sanitiza o conteúdo de uma string, aplicando redaction de PII e truncamento seguro.
+ */
+function sanitizeString(str: string): string {
+  let result = redactPiiText(str);
+
+  // Truncamento seguro para no máximo 250 caracteres
   if (result.length > MAX_STRING_LENGTH) {
     result = result.slice(0, MAX_STRING_LENGTH);
   }
@@ -181,6 +206,10 @@ function sanitizeInternal<T>(input: T, seen: WeakSet<object>, depth: number): T 
 
   if (typeof input === 'number' || typeof input === 'boolean' || typeof input === 'bigint') {
     return input;
+  }
+
+  if (input instanceof Error) {
+    return sanitizeError(input) as unknown as T;
   }
 
   if (input instanceof Date) {
@@ -218,17 +247,24 @@ function sanitizeInternal<T>(input: T, seen: WeakSet<object>, depth: number): T 
 /**
  * Sanitiza recursivamente qualquer payload JSON, removendo PII, segredos e tokens sensíveis.
  * Garante que nenhuma string ultrapasse 250 caracteres e protege contra ciclos de memória.
+ * Em caso de falha inesperada, adota estritamente uma política fail-closed.
  */
 export function sanitizePayload<T>(input: T): T {
   try {
     const seen = new WeakSet<object>();
     return sanitizeInternal(input, seen, 0);
   } catch {
-    // Fail-safe absoluto: se qualquer erro inesperado ocorrer na sanitização, retorna valor seguro
+    // Fail-closed: se qualquer erro inesperado ocorrer na sanitização, NUNCA vazar dados brutos
     if (typeof input === 'string') {
-      return input.slice(0, MAX_STRING_LENGTH) as unknown as T;
+      return '[UNSANITIZED_DATA]' as unknown as T;
     }
-    return input;
+    if (Array.isArray(input)) {
+      return ['[UNSANITIZED_DATA]'] as unknown as T;
+    }
+    if (typeof input === 'object' && input !== null) {
+      return { unredacted: '[UNSANITIZED_DATA]' } as unknown as T;
+    }
+    return '[UNSANITIZED_DATA]' as unknown as T;
   }
 }
 
@@ -294,12 +330,8 @@ export function sanitizeError(error: unknown): Record<string, unknown> {
       };
 
       if (error.stack) {
-        // Redige qualquer segredo ou token que possa ter vazado nas linhas do stack trace
-        let stackSanitized = error.stack;
-        stackSanitized = stackSanitized.replace(QUERY_PARAM_SECRET_REGEX, '$1[REDACTED]');
-        stackSanitized = stackSanitized.replace(JWT_REGEX, '[REDACTED]');
-        stackSanitized = stackSanitized.replace(BEARER_REGEX, 'Bearer [REDACTED]');
-        sanitized.stack = stackSanitized;
+        // Redige toda e qualquer PII ou credencial presente na stack trace (inclusive na linha 1 da V8)
+        sanitized.stack = redactPiiText(error.stack);
       }
 
       if (error.cause) {

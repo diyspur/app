@@ -238,7 +238,8 @@ export function logStructured(payload: StructuredLogPayload): void {
     const val = payload[key];
     if (val !== undefined && val !== null) {
       if (typeof val === 'string') {
-        sanitized[key] = val.slice(0, 200) as never;
+        const sanitizedVal = sanitizePayload(val);
+        sanitized[key] = (typeof sanitizedVal === 'string' ? sanitizedVal.slice(0, 200) : sanitizedVal) as never;
       } else if (typeof val === 'number' && Number.isFinite(val)) {
         sanitized[key] = val as never;
       }

@@ -64,6 +64,25 @@ describe('Structured Observability Logger', () => {
 
       infoSpy.mockRestore();
     });
+
+    it('sanitiza segredos e PII passados em campos string no logStructured', () => {
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+      logStructured({
+        level: 'info',
+        event: 'auth_success',
+        route: '/login?api_key=secret-token-12345',
+        request_id: 'dev@diyspur.com.br',
+      });
+
+      expect(infoSpy).toHaveBeenCalledTimes(1);
+      const parsed = JSON.parse(infoSpy.mock.calls[0]?.[0] as string);
+      expect(parsed.route).not.toContain('secret-token-12345');
+      expect(parsed.request_id).not.toContain('dev@diyspur.com.br');
+      expect(parsed.request_id).toBe('d***@***.com.br');
+
+      infoSpy.mockRestore();
+    });
   });
 
   describe('logInfo, logDebug, logWarn, logError', () => {

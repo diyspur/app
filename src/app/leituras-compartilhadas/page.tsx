@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { createServerSupabase } from '@/lib/supabase/clients';
+import { BookInviteForm } from '@/components/sharing/book-invite-form';
 
 export const metadata: Metadata = {
   title: 'Leituras compartilhadas',
@@ -221,13 +222,20 @@ export default async function SharedReadsPage({
 }) {
   const query = searchParams ? await searchParams : {};
   const data = await loadSharedReadsPage();
-  const redirect = encodeURIComponent('/leituras-compartilhadas');
+  const rawLivro = query?.livro ? String(query.livro).trim() : null;
+  const isUuid = Boolean(rawLivro && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawLivro));
+  const targetBookId = isUuid ? rawLivro : null;
+
+  const destination = targetBookId
+    ? `/leituras-compartilhadas?livro=${encodeURIComponent(targetBookId)}`
+    : '/leituras-compartilhadas';
+  const redirect = encodeURIComponent(destination);
 
   let targetBook: { id: string; title: string; slug: string } | null = null;
-  if (query?.livro && data.userId) {
+  if (targetBookId) {
     try {
       const client = await createServerSupabase();
-      const { data: b } = await client.from('books').select('id,title,slug').eq('id', query.livro).maybeSingle();
+      const { data: b } = await client.from('books').select('id,title,slug').eq('id', targetBookId).maybeSingle();
       if (b) targetBook = b;
     } catch {
       // non-blocking
@@ -252,6 +260,16 @@ export default async function SharedReadsPage({
           <span className="eyebrow">Compartilhar leitura</span>
           <h2>Convidar amigo para ler {targetBook.title}</h2>
           <p>Convide outros leitores por e-mail para acompanhar o clube e os debates deste livro com você.</p>
+          {data.userId ? (
+            <BookInviteForm bookId={targetBook.id} bookTitle={targetBook.title} />
+          ) : (
+            <p className="field-hint" style={{ marginTop: '12px' }}>
+              <Link href={`/entrar?redirect=${redirect}`} className="text-link">
+                Faça login
+              </Link>{' '}
+              para enviar convites diretos por e-mail.
+            </p>
+          )}
           <div style={{ marginTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Link className="button button-dark button-small" href={`/livros/${targetBook.slug}`}>
               Ver ficha do livro

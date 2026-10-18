@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/servers/main/schema.json",
+  "mcpServers": {
+    "sentry": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@sentry/mcp-server"
+      ],
+      "env": {
+        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}"
+      }
+    },
+    "grafana": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@grafana/mcp-grafana"
+      ],
+      "env": {
+        "GRAFANA_URL": "https://diyspur.grafana.net",
+        "GRAFANA_API_KEY": "${GRAFANA_API_KEY}"
+      }
+    }
+  }
+}

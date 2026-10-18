@@ -128,6 +128,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
       <header className="club-header-card">
         <div className="club-header-info">
           <div className="detail-pills">
+            {club.kind === 'official' && <span className="status-pill status-pill-official">Grupo Oficial</span>}
             <span className="status-pill">{club.is_private ? 'Clube privado' : 'Clube público'}</span>
           </div>
           <h1 className="club-header-title">{club.name}</h1>
@@ -265,6 +266,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
               name: club.name,
               description: club.description,
               is_private: club.is_private,
+              kind: club.kind,
               current_season_id: club.current_season_id,
             }}
             members={adminData.members}

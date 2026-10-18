@@ -7,6 +7,8 @@ type Club = {
   slug: string;
   description: string | null;
   is_private: boolean;
+  kind?: string;
+  official_book_id?: string | null;
   version: number;
   archived_at: string | null;
   created_at: string;
@@ -22,7 +24,7 @@ export async function getClubPage(slug: string) {
 
   const { data: club, error } = await client
     .from('user_clubs')
-    .select('id,owner_id,name,slug,description,is_private,version,archived_at,created_at,current_book_id,current_season_id')
+    .select('id,owner_id,name,slug,description,is_private,kind,official_book_id,version,archived_at,created_at,current_book_id,current_season_id')
     .eq('slug', slug)
     .maybeSingle();
 

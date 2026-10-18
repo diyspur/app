@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { createServerSupabase } from '@/lib/supabase/clients';
+import { type QueryResult, querySuccess, queryFailure } from '@/lib/queries/result';
 
 export type Book = {
   id: string; title: string; slug: string; author_id: string; cover_url: string | null;
@@ -38,18 +39,68 @@ export type Meeting = {
   user_clubs?: { id: string; slug: string; name: string } | null;
 };
 
+export type CatalogPageResult = {
+  books: Book[];
+  total: number;
+  page: number;
+  totalPages: number;
+};
+
+export const getBooksResult = cache(
+  async (search?: string, page: number = 1, limit: number = 24): Promise<QueryResult<CatalogPageResult>> => {
+    const client = await createServerSupabase();
+    const offset = Math.max(0, (page - 1) * limit);
+
+    let query = client
+      .from('books')
+      .select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    const term = search?.trim().replace(/[%,()]/g, '');
+    if (term) query = query.ilike('title', `%${term}%`);
+
+    const { data, count, error } = await query;
+    if (error) {
+      console.error('Catalog query failed', error.code);
+      return queryFailure('unavailable', 'Não foi possível carregar o catálogo de livros no momento.');
+    }
+
+    const books = (data ?? []) as Book[];
+    if (!books.length) {
+      return querySuccess({
+        books: [],
+        total: count ?? 0,
+        page,
+        totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+      });
+    }
+
+    const authorIds = Array.from(new Set(books.map((b) => b.author_id).filter(Boolean)));
+    const { data: authors } = authorIds.length
+      ? await client.from('authors').select('id,name').in('id', authorIds)
+      : { data: [] };
+
+    const byId = new Map((authors ?? []).map((author) => [author.id, author.name]));
+    const booksWithAuthors = books.map((book) => ({
+      ...book,
+      authors: { name: byId.get(book.author_id) ?? 'Autor(a)' },
+    }));
+
+    const total = count ?? books.length;
+    return querySuccess({
+      books: booksWithAuthors,
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  },
+);
+
 export const getBooks = cache(async (search?: string): Promise<Book[]> => {
-  const client = await createServerSupabase();
-  let query = client.from('books').select('id,title,slug,author_id,cover_url,isbn13,language,synopsis,total_chapters,total_pages,publication_year,tags,amazon_url,publisher,translator,publication_date,content_rating,edition_number,format,width_mm,height_mm,depth_mm').order('created_at', { ascending: false }).limit(36);
-  const term = search?.trim().replace(/[%,()]/g, '');
-  if (term) query = query.ilike('title', `%${term}%`);
-  const { data, error } = await query;
-  if (error) { console.error('Catalog query failed', error.code); return []; }
-  const books = (data ?? []) as Book[];
-  if (!books.length) return [];
-  const authors = await client.from('authors').select('id,name').in('id', books.map((book) => book.author_id));
-  const byId = new Map((authors.data ?? []).map((author) => [author.id, author.name]));
-  return books.map((book) => ({ ...book, authors: { name: byId.get(book.author_id) ?? 'Autor(a)' } }));
+  const result = await getBooksResult(search, 1, 36);
+  return result.ok ? result.data.books : [];
 });
 
 export const getBook = cache(async (slug: string) => {

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * Aplica SHA-256 aos dois valores antes de comparar com crypto.timingSafeEqual,
  * garantindo tamanhos idênticos de buffer (32 bytes) sem lançar RangeError.
  */
-export function timingSafeCompare(a: string, b: string): boolean {
+function timingSafeCompare(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length === 0 || b.length === 0) {
     return false;
   }

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import type { Book } from '@/features/catalog/queries';
+import type { BookReadingStatus } from '@/features/reading/schemas';
 import { BookCard } from '@/components/book-card';
 import { getStoredInteractions } from '@/features/recommendations/browser-storage';
-import { rankCatalogBooks } from '@/features/recommendations/tensorflow-recommender';
 
 interface PersonalizedCatalogProps {
   initialBooks: Book[];
@@ -27,21 +27,45 @@ export function PersonalizedCatalog({
       return;
     }
 
-    try {
-      // Re-rank candidate books using TensorFlow.js with the browser memory items (clicks/views)
-      const ranked = rankCatalogBooks(initialBooks, null, {
-        interactions,
-      });
+    let isMounted = true;
 
-      const hasRecommendations = ranked.some((b) => b.isRecommended);
-      if (hasRecommendations) {
-        setBooks(ranked);
-        setHasClientBoost(true);
+    async function reRankWithInteractions() {
+      try {
+        // Extrair mapa de leituras do servidor
+        const serverReadings = new Map<string, BookReadingStatus>();
+        for (const b of initialBooks) {
+          if (b.readingStatus) {
+            serverReadings.set(b.id, b.readingStatus as BookReadingStatus);
+          }
+        }
+
+        // Import dinâmico sob demanda
+        const { rankCatalogBooks } = await import(
+          '@/features/recommendations/tensorflow-recommender'
+        );
+        const ranked = rankCatalogBooks(initialBooks, serverReadings, {
+          interactions,
+        });
+
+        if (!isMounted) return;
+
+        const hasRecommendations = ranked.some((b) => b.isRecommended);
+        if (hasRecommendations) {
+          setBooks(ranked);
+          setHasClientBoost(true);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('[PersonalizedCatalog] Fallback to initial order:', err);
+        setBooks(initialBooks);
       }
-    } catch (err) {
-      console.warn('[PersonalizedCatalog] Fallback to initial order:', err);
-      setBooks(initialBooks);
     }
+
+    void reRankWithInteractions();
+
+    return () => {
+      isMounted = false;
+    };
   }, [initialBooks]);
 
   return (

@@ -241,6 +241,47 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       expect(ranked[0].id).toBe(bookE.id);
       expect(ranked[0].isRecommended).toBe(true);
     });
+
+    it('preserves server-provided reading statuses when re-ranking with client browser interactions', () => {
+      const booksWithStatus: Book[] = [
+        { ...bookA, readingStatus: 'read' },
+        { ...bookB, readingStatus: 'reading' },
+        { ...bookC, readingStatus: 'dnf' },
+        { ...bookD, readingStatus: undefined },
+        { ...bookE, readingStatus: undefined },
+      ];
+
+      // Extrair mapa de leituras preservadas
+      const preservedReadings = new Map<string, BookReadingStatus>(
+        booksWithStatus
+          .filter((b) => b.readingStatus)
+          .map((b) => [b.id, b.readingStatus as BookReadingStatus]),
+      );
+
+      const ranked = rankCatalogBooks(booksWithStatus, preservedReadings, {
+        interactions: [
+          {
+            bookId: bookA.id,
+            slug: bookA.slug,
+            title: bookA.title,
+            tags: bookA.tags,
+            author_id: bookA.author_id,
+            timestamp: Date.now(),
+            type: 'click',
+          },
+        ],
+      });
+
+      // bookA, bookB, bookC DEVEM permanecer no final com seus status preservados
+      const bottom = ranked.slice(2);
+      expect(bottom.find((b) => b.id === bookA.id)?.readingStatus).toBe('read');
+      expect(bottom.find((b) => b.id === bookB.id)?.readingStatus).toBe('reading');
+      expect(bottom.find((b) => b.id === bookC.id)?.readingStatus).toBe('dnf');
+
+      // Candidatos não lidos no topo
+      expect(ranked[0].id).toBe(bookE.id);
+      expect(ranked[0].readingStatus).toBeUndefined();
+    });
   });
 
   describe('BookCard Presentation with Recommendation and Status Badges', () => {

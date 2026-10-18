@@ -1,6 +1,7 @@
 'use server';
 
 import { isReadOnlyPreview, READ_ONLY_PREVIEW_MESSAGE } from '@/lib/actions/read-only';
+import { withTelemetryAction } from '@/lib/observability/action-wrapper';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@/lib/supabase/clients';
@@ -83,44 +84,63 @@ export async function getMeetingRsvpMap(meetingIds: string[]): Promise<Record<st
 }
 
 export async function setMeetingRsvp(input: unknown): Promise<MeetingRsvpActionResult> {
-  if (isReadOnlyPreview()) return { ok: false, message: READ_ONLY_PREVIEW_MESSAGE };
-  const parsed = meetingRsvpInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, message: 'O RSVP informado não é válido.' };
-  }
+  return withTelemetryAction(
+    'meetings.setMeetingRsvp',
+    async (inp: unknown): Promise<MeetingRsvpActionResult> => {
+      if (isReadOnlyPreview()) return { ok: false, message: READ_ONLY_PREVIEW_MESSAGE };
+      const parsed = meetingRsvpInputSchema.safeParse(inp);
+      if (!parsed.success) {
+        return { ok: false, message: 'O RSVP informado não é válido.' };
+      }
 
-  const session = await getAuthenticatedContext();
-  if (!session) {
-    return { ok: false, message: 'Entre na sua conta para responder ao encontro.', requiresAuth: true };
-  }
+      const session = await getAuthenticatedContext();
+      if (!session) {
+        return { ok: false, message: 'Entre na sua conta para responder ao encontro.', requiresAuth: true };
+      }
 
-  const values: MeetingRsvpInsert = {
-    meeting_id: parsed.data.meetingId,
-    user_id: session.userId,
-    attending: parsed.data.attending,
-  };
+      const values: MeetingRsvpInsert = {
+        meeting_id: parsed.data.meetingId,
+        user_id: session.userId,
+        attending: parsed.data.attending,
+      };
 
-  // Upsert is scoped by the composite primary key and the user_id comes only
-  // from getClaims(). Cancellation is attending=false, not a DELETE, so this
-  // action uses the owner INSERT/UPDATE policies and preserves the RSVP row.
-  const { error } = await session.supabase
-    .from('meeting_rsvps')
-    .upsert(values, { onConflict: 'meeting_id,user_id' });
+      // Upsert is scoped by the composite primary key and the user_id comes only
+      // from getClaims(). Cancellation is attending=false, not a DELETE, so this
+      // action uses the owner INSERT/UPDATE policies and preserves the RSVP row.
+      const { error } = await session.supabase
+        .from('meeting_rsvps')
+        .upsert(values, { onConflict: 'meeting_id,user_id' });
 
-  if (error) {
-    console.error('RSVP write failed', error.code);
-    return {
-      ok: false,
-      message: error.code === '42501'
-        ? 'Sua sessão não permite alterar este RSVP.'
-        : 'Não foi possível salvar sua resposta agora. Tente novamente.',
-    };
-  }
+      if (error) {
+        console.error('RSVP write failed', error.code);
+        return {
+          ok: false,
+          message: error.code === '42501'
+            ? 'Sua sessão não permite alterar este RSVP.'
+            : 'Não foi possível salvar sua resposta agora. Tente novamente.',
+        };
+      }
 
-  revalidatePath('/calendario');
-  return {
-    ok: true,
-    attending: parsed.data.attending,
-    message: parsed.data.attending ? 'Intenção de presença registrada. Isso não contabiliza presença nem concede XP.' : 'Intenção de presença cancelada.',
-  };
+      revalidatePath('/calendario');
+      return {
+        ok: true,
+        attending: parsed.data.attending,
+        message: parsed.data.attending
+          ? 'Intenção de presença registrada. Isso não contabiliza presença nem concede XP.'
+          : 'Intenção de presença cancelada.',
+      };
+    },
+    {
+      resourceExtractor: (inp: unknown) => {
+        const parsed = meetingRsvpInputSchema.safeParse(inp);
+        if (parsed.success) {
+          return {
+            meetingId: parsed.data.meetingId,
+            attending: parsed.data.attending,
+          };
+        }
+        return {};
+      },
+    }
+  )(input);
 }

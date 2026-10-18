@@ -1,4 +1,3 @@
-import * as Sentry from '@sentry/nextjs';
 import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 import client from 'prom-client';
 import { logInfo, logError } from './logger';
@@ -124,17 +123,16 @@ function sanitizeActionResult<T>(result: T): T {
   try {
     const res = result as Record<string, unknown>;
     if (typeof res.message === 'string') {
-      // Se contiver credenciais de banco ou palavras de erro SQL bruto, redige
-      const lower = res.message.toLowerCase();
+      res.message = redactPiiText(res.message);
+      const lower = (res.message as string).toLowerCase();
       if (
         lower.includes('postgresql://') ||
         lower.includes('postgres://') ||
         lower.includes('password authentication') ||
-        lower.includes('pg_') ||
         lower.includes('syntax error at or near') ||
         lower.includes('connection string')
       ) {
-        res.message = redactPiiText(res.message);
+        res.message = 'Não foi possível concluir esta operação no momento. Tente novamente em instantes.';
       }
     }
     return result;
@@ -270,7 +268,7 @@ export function withTelemetryAction<TArgs extends unknown[], TResult>(
         // noop
       }
 
-      return result;
+      return sanitizeActionResult(result);
     } catch (error) {
       const durationMs = Math.max(0, performance.now() - startTime);
       recordMetric(actionName, 'exception', durationMs);

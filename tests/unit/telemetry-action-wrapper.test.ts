@@ -193,6 +193,23 @@ describe('withTelemetryAction Wrapper', () => {
       expect(result.message).not.toContain('admin:p@ss123@db.com');
     });
 
+    it('unconditionally redacts PII in any action result message (emails, bearer tokens)', async () => {
+      const handler = vi.fn(async () => {
+        return {
+          ok: true,
+          message: 'Notificação enviada para usuario.teste@diyspur.com com Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeak',
+        };
+      });
+
+      const wrapped = withTelemetryAction('notifications.send', handler);
+      const result = (await wrapped()) as { ok: boolean; message: string };
+
+      expect(result.ok).toBe(true);
+      expect(result.message).not.toContain('usuario.teste@diyspur.com');
+      expect(result.message).toContain('u***@***.com');
+      expect(result.message).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
+    });
+
     it('supports custom fallbackResponse function when exception is caught', async () => {
       const handler = vi.fn(async () => {
         throw new Error('Timeout connecting to microservice');
@@ -202,7 +219,7 @@ describe('withTelemetryAction Wrapper', () => {
         'journal.saveEntry',
         handler,
         {
-          fallbackResponse: (err) => ({
+          fallbackResponse: () => ({
             ok: false,
             message: 'Erro específico do diário.',
             code: 'journal_error',

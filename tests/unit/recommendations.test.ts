@@ -4,7 +4,6 @@ import type { Book } from '@/features/catalog/queries';
 import type { BookReadingStatus } from '@/features/reading/schemas';
 import type {
   FeatureVocabulary,
-  IndexedVocabulary,
 } from '@/features/recommendations/types';
 import {
   buildFeatureVocabulary,

@@ -1,11 +1,19 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Catálogo e Ficha de Livros', () => {
-  test('catálogo carrega sem termo e exibe cabeçalho e formulário', async ({ page }) => {
+  test('catálogo carrega sem termo, exibe cabeçalho e usa rolagem infinita', async ({ page }) => {
     const response = await page.goto('/livros');
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Uma boa história');
     await expect(page.getByRole('searchbox', { name: 'Buscar livros por título' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Paginação do catálogo' })).toHaveCount(0);
+  });
+
+  test('API do catálogo rejeita um número de página inválido', async ({ request }) => {
+    const response = await request.get('/api/books/catalog?page=abc');
+    expect(response.status()).toBe(400);
+    const payload = await response.json();
+    expect(payload).toMatchObject({ error: 'invalid_page' });
   });
 
   test('busca por termo inexistente exibe estado vazio apropriado', async ({ page }) => {

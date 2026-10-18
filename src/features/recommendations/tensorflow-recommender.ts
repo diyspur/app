@@ -16,20 +16,28 @@ const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBook
 };
 
 /**
- * Builds normalized feature vocabulary from a list of books.
+ * Builds normalized feature vocabulary from a list of books with O(1) indexed maps
+ * and TF-IDF Inverse Document Frequency weights for tags.
  */
 export function buildFeatureVocabulary(books: Book[]): IndexedVocabulary {
   const tagSet = new Set<string>();
   const authorSet = new Set<string>();
+  const tagDfMap = new Map<string, number>();
+  const N = books.length;
 
   for (const book of books) {
     if (book.author_id) {
       authorSet.add(book.author_id);
     }
     if (Array.isArray(book.tags)) {
+      const bookTags = new Set<string>();
       for (const tag of book.tags) {
         const clean = tag.trim().toLowerCase();
-        if (clean) tagSet.add(clean);
+        if (clean) bookTags.add(clean);
+      }
+      for (const clean of bookTags) {
+        tagSet.add(clean);
+        tagDfMap.set(clean, (tagDfMap.get(clean) ?? 0) + 1);
       }
     }
   }
@@ -39,19 +47,53 @@ export function buildFeatureVocabulary(books: Book[]): IndexedVocabulary {
   const tagIndexMap = new Map<string, number>(tags.map((t, i) => [t, i]));
   const authorIndexMap = new Map<string, number>(authorIds.map((a, i) => [a, i]));
 
+  const tagIdfMap = new Map<string, number>();
+  for (const tag of tags) {
+    const df = tagDfMap.get(tag) ?? 0;
+    // Smooth IDF formula: ln((1 + N) / (1 + df)) + 1
+    const idf = Math.log((1 + N) / (1 + df)) + 1;
+    tagIdfMap.set(tag, idf);
+  }
+
   return {
     tags,
     authorIds,
     tagIndexMap,
     authorIndexMap,
-    tagIdfMap: new Map<string, number>(),
+    tagIdfMap,
   };
 }
 
 /**
- * Encodes a book into a numeric feature vector.
+ * Normalizes a numeric vector to unit length (L2 norm = 1).
+ * Returns a new zero-filled array if the norm is below epsilon to prevent division by zero.
  */
-export function vectorizeBook(book: Book, vocab: FeatureVocabulary): number[] {
+export function normalizeVector(vector: number[], epsilon = 1e-7): number[] {
+  let sumSq = 0;
+  for (let i = 0; i < vector.length; i++) {
+    sumSq += vector[i] * vector[i];
+  }
+  const norm = Math.sqrt(sumSq);
+  if (norm <= epsilon) {
+    return new Array(vector.length).fill(0);
+  }
+  const normalized = new Array<number>(vector.length);
+  for (let i = 0; i < vector.length; i++) {
+    normalized[i] = vector[i] / norm;
+  }
+  return normalized;
+}
+
+/**
+ * Encodes a book into a numeric feature vector using O(1) index map lookups.
+ * Tags are weighted by their IDF (Inverse Document Frequency).
+ * Optionally normalizes the resulting vector to unit length (L2 norm = 1).
+ */
+export function vectorizeBook(
+  book: Book,
+  vocab: FeatureVocabulary,
+  normalize = false,
+): number[] {
   const vector: number[] = new Array(vocab.tags.length + vocab.authorIds.length).fill(0);
 
   // Author match feature (weighted 1.5 for high author affinity)
@@ -64,7 +106,7 @@ export function vectorizeBook(book: Book, vocab: FeatureVocabulary): number[] {
     }
   }
 
-  // Tag features
+  // Tag features weighted by IDF
   if (Array.isArray(book.tags)) {
     for (const tag of book.tags) {
       const clean = tag.trim().toLowerCase();
@@ -72,12 +114,12 @@ export function vectorizeBook(book: Book, vocab: FeatureVocabulary): number[] {
         ? (vocab.tagIndexMap.get(clean) ?? -1)
         : vocab.tags.indexOf(clean);
       if (tagIdx !== -1) {
-        vector[tagIdx] = 1.0;
+        vector[tagIdx] = vocab.tagIdfMap?.get(clean) ?? 1.0;
       }
     }
   }
 
-  return vector;
+  return normalize ? normalizeVector(vector) : vector;
 }
 
 /**
@@ -132,12 +174,13 @@ export function computeTensorFlowRecommendations(
   }
 
   // Construct user profile vector as weighted sum of read, reading & interacted books
+  // Each history/interaction book is normalized to unit length before weighting and accumulation
   const userProfile = new Array<number>(featureDim).fill(0);
   let hasValidSignal = false;
 
   for (const item of historyBooks) {
     const weight = item.status === 'reading' ? opts.readingWeight : opts.readWeight;
-    const bookVec = vectorizeBook(item.book, vocab);
+    const bookVec = vectorizeBook(item.book, vocab, true);
     for (let i = 0; i < featureDim; i++) {
       if (bookVec[i] > 0) {
         userProfile[i] += bookVec[i] * weight;
@@ -151,7 +194,7 @@ export function computeTensorFlowRecommendations(
       const interaction = interactions[idx];
       const b = interactionBooks[idx];
       const interactionWeight = interaction.weight ?? opts.interactionWeight;
-      const bookVec = vectorizeBook(b, vocab);
+      const bookVec = vectorizeBook(b, vocab, true);
       for (let i = 0; i < featureDim; i++) {
         if (bookVec[i] > 0) {
           userProfile[i] += bookVec[i] * interactionWeight;
@@ -165,12 +208,13 @@ export function computeTensorFlowRecommendations(
     return scoresMap;
   }
 
+  const normalizedUserProfile = normalizeVector(userProfile);
   const candidateVectors = candidates.map((b) => vectorizeBook(b, vocab));
 
   try {
     const scores = tf.tidy(() => {
       // User tensor: shape [1, featureDim]
-      const userTensor = tf.tensor2d([userProfile], [1, featureDim]);
+      const userTensor = tf.tensor2d([normalizedUserProfile], [1, featureDim]);
       // Candidates tensor: shape [numCandidates, featureDim]
       const candTensor = tf.tensor2d(candidateVectors, [candidates.length, featureDim]);
 

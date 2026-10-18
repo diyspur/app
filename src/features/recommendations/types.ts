@@ -19,7 +19,7 @@ export interface IndexedVocabulary extends FeatureVocabulary {
   authorIds: string[];
   tagIndexMap: Map<string, number>;
   authorIndexMap: Map<string, number>;
-  tagIdfMap?: Map<string, number>;
+  tagIdfMap: Map<string, number>;
 }
 
 export interface RecommendationScore {

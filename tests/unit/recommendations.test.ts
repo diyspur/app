@@ -8,9 +8,13 @@ import type {
 import {
   buildFeatureVocabulary,
   vectorizeBook,
+  normalizeVector,
   computeTensorFlowRecommendations,
   rankCatalogBooks,
 } from '@/features/recommendations/tensorflow-recommender';
+import {
+  computeNativeRecommendations,
+} from '@/features/recommendations/native-recommender';
 
 describe('TensorFlow.js Book Recommendation Engine', () => {
   const author1 = '11111111-1111-1111-1111-111111111111';
@@ -132,6 +136,7 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       const legacyVocab: FeatureVocabulary = {
         tags: [...vocab.tags],
         authorIds: [...vocab.authorIds],
+        tagIdfMap: vocab.tagIdfMap,
       };
 
       for (const book of sampleCatalog) {
@@ -618,6 +623,174 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       const scoreOld = rankedScores.get(candidateOld.id) ?? 0;
 
       expect(scoreRecent).toBeGreaterThan(scoreOld);
+    });
+  });
+
+  describe('TF-IDF Tag Weighting and Per-Book Vector Normalization (Task 3.2)', () => {
+    it('computes correct smooth IDF weights in buildFeatureVocabulary for rare vs ubiquitous tags', () => {
+      // Create a catalog with 20 books:
+      // - 19 books have the ubiquitous tag "ficção" (df = 19)
+      // - 1 book has the rare tag "distopia cyberpunk" (df = 1)
+      const catalog20: Book[] = [];
+      for (let i = 0; i < 19; i++) {
+        catalog20.push(
+          mockBook(`ubiq-${i}`, `Livro Ubíquo ${i}`, `author-${i}`, ['ficção', `genero-${i}`]),
+        );
+      }
+      catalog20.push(
+        mockBook('rare-0', 'Neuromancer Distópico', 'author-cyber', ['distopia cyberpunk']),
+      );
+
+      const vocab = buildFeatureVocabulary(catalog20);
+      const N = 20;
+
+      // IDF(t) = ln((1 + N) / (1 + df(t))) + 1
+      const expectedIdfUbiq = Math.log((1 + N) / (1 + 19)) + 1; // ln(21 / 20) + 1 ~ 1.04879
+      const expectedIdfRare = Math.log((1 + N) / (1 + 1)) + 1; // ln(21 / 2) + 1 ~ 3.351375
+
+      const actualIdfUbiq = vocab.tagIdfMap.get('ficção');
+      const actualIdfRare = vocab.tagIdfMap.get('distopia cyberpunk');
+
+      expect(actualIdfUbiq).toBeDefined();
+      expect(actualIdfRare).toBeDefined();
+      expect(actualIdfUbiq).toBeCloseTo(expectedIdfUbiq, 5);
+      expect(actualIdfRare).toBeCloseTo(expectedIdfRare, 5);
+
+      // Rare tag has more than 3x the weight of ubiquitous tag
+      expect(actualIdfRare!).toBeGreaterThan(actualIdfUbiq! * 3);
+    });
+
+    it('demonstrates that books sharing a rare tag receive higher recommendation affinity than books sharing only a ubiquitous tag', () => {
+      // Catalog where "ficção" is present in 95% (19/20) of books
+      // and "distopia cyberpunk" is rare (present in read book and candidateRare)
+      const backgroundBooks: Book[] = [];
+      for (let i = 0; i < 17; i++) {
+        backgroundBooks.push(
+          mockBook(`bg-${i}`, `Livro Fundo ${i}`, `auth-bg-${i}`, ['ficção', `bg-tag-${i}`]),
+        );
+      }
+
+      // User has read a book containing both ficção and distopia cyberpunk
+      const readBook = mockBook('read-book', 'Cyber Ficção', 'auth-read', [
+        'ficção',
+        'distopia cyberpunk',
+      ]);
+
+      // Candidate 1 shares only the rare tag "distopia cyberpunk"
+      const candidateRare = mockBook('cand-rare', 'Distopia Pura', 'auth-cand-rare', [
+        'distopia cyberpunk',
+      ]);
+
+      // Candidate 2 shares only the ubiquitous tag "ficção"
+      const candidateUbiquitous = mockBook('cand-ubiq', 'Ficção Genérica', 'auth-cand-ubiq', [
+        'ficção',
+      ]);
+
+      const candidates = [candidateRare, candidateUbiquitous, ...backgroundBooks];
+      const historyBooks = [{ book: readBook, status: 'read' as const }];
+
+      // Compute recommendations with TensorFlow.js recommender
+      const tfScores = computeTensorFlowRecommendations(candidates, historyBooks);
+      const tfRareScore = tfScores.get(candidateRare.id) ?? 0;
+      const tfUbiqScore = tfScores.get(candidateUbiquitous.id) ?? 0;
+
+      // Rare tag book MUST receive substantially higher score than ubiquitous tag book
+      expect(tfRareScore).toBeGreaterThan(tfUbiqScore * 2);
+
+      // Compute recommendations with Native JS recommender
+      const nativeScores = computeNativeRecommendations(candidates, historyBooks);
+      const nativeRareScore = nativeScores.get(candidateRare.id) ?? 0;
+      const nativeUbiqScore = nativeScores.get(candidateUbiquitous.id) ?? 0;
+
+      expect(nativeRareScore).toBeGreaterThan(nativeUbiqScore * 2);
+      expect(Math.abs(nativeRareScore - tfRareScore)).toBeLessThanOrEqual(1e-5);
+      expect(Math.abs(nativeUbiqScore - tfUbiqScore)).toBeLessThanOrEqual(1e-5);
+
+      // In rankCatalogBooks, candidateRare must rank ahead of candidateUbiquitous
+      const allBooks = [readBook, candidateUbiquitous, candidateRare, ...backgroundBooks];
+      const userReadings = new Map<string, BookReadingStatus>([[readBook.id, 'read']]);
+      const ranked = rankCatalogBooks(allBooks, userReadings);
+
+      expect(ranked[0].id).toBe(candidateRare.id);
+      expect(ranked[0].isRecommended).toBe(true);
+    });
+
+    it('demonstrates that books with many tags are normalized and do not skew the profile excessively compared to books with fewer tags', () => {
+      // User has read two books:
+      // Book 1 (focused): 2 niche tags
+      // Book 2 (tag-stuffed): 20 broad tags
+      const focusedTags = ['distopia-hardcore', 'ai-sentiente'];
+      const stuffedTags = Array.from({ length: 20 }, (_, i) => `broad-topic-${i + 1}`);
+
+      const bookFocused = mockBook('b-focused', 'Focused Book', 'auth-f', focusedTags);
+      const bookStuffed = mockBook('b-stuffed', 'Tag Stuffed Book', 'auth-s', stuffedTags);
+
+      // Candidate 1: matches the 2 niche tags of the focused book
+      const candidateFocused = mockBook('c-focused', 'Focused Match', 'auth-cf', [
+        'distopia-hardcore',
+        'ai-sentiente',
+      ]);
+
+      // Candidate 2: matches 2 tags from the 20-tag stuffed book
+      const candidateStuffed = mockBook('c-stuffed', 'Stuffed Partial Match', 'auth-cs', [
+        'broad-topic-1',
+        'broad-topic-2',
+      ]);
+
+      const candidates = [candidateFocused, candidateStuffed];
+      const historyBooks = [
+        { book: bookFocused, status: 'read' as const },
+        { book: bookStuffed, status: 'read' as const },
+      ];
+
+      // Because bookStuffed was normalized (L2 norm = 1), each of its 20 tags has weight 1/sqrt(20) ~ 0.224.
+      // Meanwhile, each of bookFocused's 2 tags has weight 1/sqrt(2) ~ 0.707.
+      // Therefore, candidateFocused (matching 100% of bookFocused) receives much higher affinity
+      // than candidateStuffed (matching only 10% of bookStuffed).
+      const tfScores = computeTensorFlowRecommendations(candidates, historyBooks);
+      const nativeScores = computeNativeRecommendations(candidates, historyBooks);
+
+      const tfScoreFocused = tfScores.get(candidateFocused.id) ?? 0;
+      const tfScoreStuffed = tfScores.get(candidateStuffed.id) ?? 0;
+      const nativeScoreFocused = nativeScores.get(candidateFocused.id) ?? 0;
+      const nativeScoreStuffed = nativeScores.get(candidateStuffed.id) ?? 0;
+
+      expect(tfScoreFocused).toBeGreaterThan(tfScoreStuffed * 2);
+      expect(nativeScoreFocused).toBeGreaterThan(nativeScoreStuffed * 2);
+      expect(Math.abs(nativeScoreFocused - tfScoreFocused)).toBeLessThanOrEqual(1e-5);
+      expect(Math.abs(nativeScoreStuffed - tfScoreStuffed)).toBeLessThanOrEqual(1e-5);
+    });
+
+    it('normalizes vectors to unit length (L2 norm = 1) with normalizeVector and vectorizeBook(..., true)', () => {
+      // 3-4-5 Pythagorean triangle: [3, 4] norm is 5 -> [0.6, 0.8] with L2 norm = 1.0
+      const vec = [3, 4];
+      const normalized = normalizeVector(vec);
+
+      expect(normalized[0]).toBeCloseTo(0.6, 5);
+      expect(normalized[1]).toBeCloseTo(0.8, 5);
+
+      const l2 = Math.sqrt(normalized[0] * normalized[0] + normalized[1] * normalized[1]);
+      expect(l2).toBeCloseTo(1.0, 5);
+
+      // Zero vector safely returns zero array without NaN
+      const zeroNorm = normalizeVector([0, 0, 0, 0]);
+      expect(zeroNorm).toEqual([0, 0, 0, 0]);
+      expect(zeroNorm.some((v) => Number.isNaN(v))).toBe(false);
+
+      // Sub-epsilon vectors also return zero array
+      const tinyNorm = normalizeVector([1e-9, 1e-9]);
+      expect(tinyNorm).toEqual([0, 0]);
+
+      // vectorizeBook with normalize = true returns unit norm vector
+      const vocab = buildFeatureVocabulary(sampleCatalog);
+      const unitBookVec = vectorizeBook(bookA, vocab, true);
+      const unitL2 = Math.sqrt(unitBookVec.reduce((sum, v) => sum + v * v, 0));
+      expect(unitL2).toBeCloseTo(1.0, 5);
+
+      // vectorizeBook with normalize = false returns unnormalized vector
+      const rawBookVec = vectorizeBook(bookA, vocab, false);
+      const rawL2 = Math.sqrt(rawBookVec.reduce((sum, v) => sum + v * v, 0));
+      expect(rawL2).toBeGreaterThan(1.0);
     });
   });
 });

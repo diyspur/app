@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as tf from '@tensorflow/tfjs';
 import type { Book } from '@/features/catalog/queries';
 import type { BookReadingStatus } from '@/features/reading/schemas';
@@ -220,6 +220,27 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       expect(ranked[0].id).toBe(bookE.id);
       expect(ranked[0].isRecommended).toBe(true);
     });
+
+    it('ranks candidate books based on user clicks/views stored in browser memory (memoryItem)', () => {
+      // User has no server reading history, but clicked/viewed bookA in browser
+      const ranked = rankCatalogBooks([bookC, bookD, bookE], null, {
+        interactions: [
+          {
+            bookId: bookA.id,
+            slug: bookA.slug,
+            title: bookA.title,
+            tags: bookA.tags,
+            author_id: bookA.author_id,
+            timestamp: Date.now(),
+            type: 'click',
+          },
+        ],
+      });
+
+      // bookE shares author1 and 'Suspense' with clicked bookA -> should be ranked first
+      expect(ranked[0].id).toBe(bookE.id);
+      expect(ranked[0].isRecommended).toBe(true);
+    });
   });
 
   describe('BookCard Presentation with Recommendation and Status Badges', () => {
@@ -242,6 +263,67 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
 
       expect(card).toBeDefined();
       expect(card.props.href).toBe('/livros/a-garota-no-trem');
+    });
+  });
+
+  describe('Browser Storage for Book Interactions (memoryItem)', () => {
+    beforeEach(() => {
+      const store = new Map<string, string>();
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, v),
+        removeItem: (k: string) => store.delete(k),
+        clear: () => store.clear(),
+      });
+    });
+
+    it('saves and retrieves interaction under memoryItem and list', async () => {
+      const { saveBookInteraction, getStoredInteractions, MEMORY_ITEM_KEY } = await import(
+        '@/features/recommendations/browser-storage'
+      );
+
+      saveBookInteraction({
+        bookId: 'b-test',
+        slug: 'livro-teste',
+        title: 'Livro Teste',
+        tags: ['ficcao'],
+        author_id: 'auth-1',
+        type: 'click',
+      });
+
+      const interactions = getStoredInteractions();
+      expect(interactions.length).toBe(1);
+      expect(interactions[0].bookId).toBe('b-test');
+      expect(interactions[0].type).toBe('click');
+
+      const single = JSON.parse(localStorage.getItem(MEMORY_ITEM_KEY)!);
+      expect(single.bookId).toBe('b-test');
+    });
+
+    it('deduplicates multiple clicks on the same book keeping newest', async () => {
+      const { saveBookInteraction, getStoredInteractions } = await import(
+        '@/features/recommendations/browser-storage'
+      );
+
+      saveBookInteraction({
+        bookId: 'b-1',
+        slug: 'slug-1',
+        title: 'Title 1',
+        type: 'click',
+        timestamp: 100,
+      });
+      saveBookInteraction({
+        bookId: 'b-1',
+        slug: 'slug-1',
+        title: 'Title 1',
+        type: 'view',
+        timestamp: 200,
+      });
+
+      const items = getStoredInteractions();
+      expect(items.length).toBe(1);
+      expect(items[0].timestamp).toBe(200);
+      expect(items[0].type).toBe('view');
     });
   });
 });

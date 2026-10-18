@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { getBooksResult } from '@/features/catalog/queries';
-import { BookCard } from '@/components/book-card';
+import { PersonalizedCatalog } from '@/components/catalog/personalized-catalog';
 import { BookSearch } from '@/components/catalog/book-search';
 import { JsonLd } from '@/components/json-ld';
 
@@ -106,11 +106,10 @@ export default async function BooksPage({
 
       {books.length ? (
         <>
-          <div className="book-grid section">
-            {books.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
+          <PersonalizedCatalog
+            initialBooks={books}
+            isServerPersonalized={Boolean(isPersonalized)}
+          />
 
           {totalPages > 1 && (
             <nav aria-label="Paginação do catálogo" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '32px' }}>

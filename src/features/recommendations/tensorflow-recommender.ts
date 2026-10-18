@@ -7,10 +7,11 @@ import type {
   ScoredBook,
 } from './types';
 
-const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBooks'>> = {
+const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBooks' | 'interactions'>> = {
   recommendationThreshold: 0.15,
   readingWeight: 1.25,
   readWeight: 1.0,
+  interactionWeight: 0.8,
 };
 
 /**
@@ -76,13 +77,40 @@ export function computeTensorFlowRecommendations(
   options?: RecommendationOptions,
 ): Map<string, number> {
   const scoresMap = new Map<string, number>();
+  const interactions = options?.interactions ?? [];
 
-  if (!candidates.length || !historyBooks.length) {
+  if (!candidates.length || (!historyBooks.length && !interactions.length)) {
     return scoresMap;
   }
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const allBooks = [...candidates, ...historyBooks.map((h) => h.book)];
+
+  const interactionBooks: Book[] = interactions.map((i) => ({
+    id: i.bookId,
+    title: i.title,
+    slug: i.slug,
+    author_id: i.author_id ?? '',
+    tags: Array.isArray(i.tags) ? i.tags : [],
+    cover_url: null,
+    isbn13: null,
+    language: null,
+    synopsis: null,
+    total_chapters: null,
+    total_pages: null,
+    publication_year: null,
+    amazon_url: null,
+    publisher: null,
+    translator: null,
+    publication_date: null,
+    content_rating: null,
+    edition_number: null,
+    format: null,
+    width_mm: null,
+    height_mm: null,
+    depth_mm: null,
+  }));
+
+  const allBooks = [...candidates, ...historyBooks.map((h) => h.book), ...interactionBooks];
   const vocab = buildFeatureVocabulary(allBooks);
   const featureDim = vocab.tags.length + vocab.authorIds.length;
 
@@ -90,7 +118,7 @@ export function computeTensorFlowRecommendations(
     return scoresMap;
   }
 
-  // Construct user profile vector as weighted sum of read & reading books
+  // Construct user profile vector as weighted sum of read, reading & interacted books
   const userProfile = new Array<number>(featureDim).fill(0);
   let hasValidSignal = false;
 
@@ -101,6 +129,19 @@ export function computeTensorFlowRecommendations(
       if (bookVec[i] > 0) {
         userProfile[i] += bookVec[i] * weight;
         hasValidSignal = true;
+      }
+    }
+  }
+
+  if (interactionBooks.length > 0) {
+    const interactionWeight = opts.interactionWeight;
+    for (const b of interactionBooks) {
+      const bookVec = vectorizeBook(b, vocab);
+      for (let i = 0; i < featureDim; i++) {
+        if (bookVec[i] > 0) {
+          userProfile[i] += bookVec[i] * interactionWeight;
+          hasValidSignal = true;
+        }
       }
     }
   }
@@ -147,7 +188,7 @@ export function computeTensorFlowRecommendations(
 
 /**
  * Ranks catalog books according to user requirements:
- * 1. Top of the list: candidate books recommended by TensorFlow.js based on what was read or is being read.
+ * 1. Top of the list: candidate books recommended by TensorFlow.js based on what was read or is being read or interacted with in browser.
  * 2. Unread candidate books without strong affinity follow.
  * 3. Bottom of the list: books already read ('read'), in progress ('reading'), or dropped ('dnf').
  */
@@ -159,9 +200,10 @@ export function rankCatalogBooks(
   if (!books.length) return [];
 
   const readings = userReadings ?? new Map<string, BookReadingStatus>();
+  const hasInteractions = Boolean(options?.interactions && options.interactions.length > 0);
 
-  // If user has no reading history, return catalog in original order without badges
-  if (readings.size === 0) {
+  // If user has no reading history and no browser interactions, return catalog in original order without badges
+  if (readings.size === 0 && !hasInteractions) {
     return books.map((book) => ({
       ...book,
       isRecommended: false,
@@ -208,7 +250,7 @@ export function rankCatalogBooks(
 
   let scoredCandidates: ScoredBook[] = [];
 
-  if (historyBooks.length > 0 && candidates.length > 0) {
+  if ((historyBooks.length > 0 || hasInteractions) && candidates.length > 0) {
     const scores = computeTensorFlowRecommendations(candidates, historyBooks, opts);
 
     scoredCandidates = candidates.map((book) => {

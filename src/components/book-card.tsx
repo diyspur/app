@@ -1,13 +1,28 @@
+'use client';
+
 import Link from 'next/link';
 import type { Book } from '@/features/catalog/queries';
 import { BookCover } from '@/components/books/book-cover';
+import { saveBookInteraction } from '@/features/recommendations/browser-storage';
 
 export function BookCard({ book }: { book: Book }) {
+  const handleClick = () => {
+    saveBookInteraction({
+      bookId: book.id,
+      slug: book.slug,
+      title: book.title,
+      tags: book.tags,
+      author_id: book.author_id,
+      type: 'click',
+    });
+  };
+
   return (
     <Link
       className="book-card"
       href={`/livros/${encodeURIComponent(book.slug)}`}
       aria-label={`${book.title}, ${book.authors?.name ?? 'autor(a) desconhecido'}`}
+      onClick={handleClick}
     >
       <div className="book-card-cover">
         <BookCover

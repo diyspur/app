@@ -37,6 +37,25 @@ export interface RecommendationOptions {
    * Optional full details of books from reading history if not in current candidates list.
    */
   externalHistoryBooks?: Book[];
+  /**
+   * Weight multiplier for books interacted with (clicked/viewed).
+   * Default: 0.8
+   */
+  interactionWeight?: number;
+  /**
+   * Books recently viewed or clicked by the user stored in browser memory.
+   */
+  interactions?: BookInteraction[];
+}
+
+export interface BookInteraction {
+  bookId: string;
+  slug: string;
+  title: string;
+  tags?: string[] | null;
+  author_id?: string | null;
+  timestamp: number;
+  type: 'click' | 'view';
 }
 
 export type ScoredBook = Book & {

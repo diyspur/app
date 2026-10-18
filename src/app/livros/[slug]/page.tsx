@@ -14,6 +14,7 @@ import { isBookInUserUpNext } from '@/features/up-next/queries';
 import { getUserEditableLists } from '@/features/lists/queries';
 import { requireSession } from '@/lib/auth/session';
 import { JsonLd } from '@/components/json-ld';
+import { BookViewTracker } from '@/components/books/book-view-tracker';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -93,6 +94,15 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
   return (
     <div className="container">
       <JsonLd data={jsonLdData} />
+      <BookViewTracker
+        book={{
+          id: book.id,
+          slug: book.slug,
+          title: book.title,
+          tags: book.tags,
+          author_id: book.author_id,
+        }}
+      />
       <header className="book-hero">
         <div className="book-hero-grid">
           <div className="book-cover-wrap">

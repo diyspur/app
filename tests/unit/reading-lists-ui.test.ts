@@ -28,7 +28,9 @@ describe('Reading Lists Integration (QA-07, QA-08)', () => {
     });
 
     expect(res.ok).toBe(false);
-    expect(res.requiresAuth).toBe(true);
+    if (!res.ok) {
+      expect(res.requiresAuth).toBe(true);
+    }
   });
 
   it('adds book to list via RPC when authenticated', async () => {

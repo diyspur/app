@@ -106,6 +106,10 @@ export default async function ChapterPage({
     ...(book ? { isPartOf: { '@type': 'Book', name: book.title, url: `${siteUrl}/livros/${encodeURIComponent(book.slug)}` } } : {}),
   };
 
+  const isSeasonTitleSameAsBook =
+    Boolean(book && season && book.title.toLowerCase().trim() === season.title.toLowerCase().trim());
+  const seasonBreadcrumbLabel = isSeasonTitleSameAsBook ? `Temporada ${season!.number}` : season?.title;
+
   return (
     <div className="container">
       <JsonLd data={chapterSchema} />
@@ -114,17 +118,17 @@ export default async function ChapterPage({
           <Link href="/livros">Livros</Link>
           {book && (
             <>
-              <span>/</span>
+              <span aria-hidden="true">/</span>
               <Link href={`/livros/${book.slug}`}>{book.title}</Link>
             </>
           )}
           {season && (
             <>
-              <span>/</span>
-              <Link href={`/temporadas/${season.slug}`}>{season.title}</Link>
+              <span aria-hidden="true">/</span>
+              <Link href={`/temporadas/${season.slug}`}>{seasonBreadcrumbLabel}</Link>
             </>
           )}
-          <span>/</span>
+          <span aria-hidden="true">/</span>
           <span>Capítulo {chapter.number}</span>
         </nav>
         <span className="eyebrow">Capítulo {chapter.number}</span>

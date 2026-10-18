@@ -189,7 +189,7 @@ export function ChannelChat({
   };
 
   const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const [hasMoreEarlier, setHasMoreEarlier] = useState(initialMessages.length >= 20);
+  const [hasMoreEarlier, setHasMoreEarlier] = useState(workspace.messages.length >= 20);
 
   const handleLoadEarlier = async () => {
     if (loadingEarlier || messages.length === 0) return;
@@ -207,19 +207,19 @@ export function ChannelChat({
         if (data.length < 30) {
           setHasMoreEarlier(false);
         }
-        const olderViews: ClubMessageView[] = data.map((row: any) => ({
-          id: row.id,
-          channelId: row.channel_id,
-          authorId: row.author_id,
-          authorName: row.author_name || 'Leitor(a)',
-          authorUsername: row.author_username,
-          authorAvatarUrl: row.author_avatar_url,
-          content: row.content,
-          replyToId: row.reply_to_id,
-          videoSec: row.video_sec,
-          version: row.version,
-          createdAt: row.created_at,
-          editedAt: row.edited_at,
+        const olderViews: ClubMessageView[] = (data as Record<string, unknown>[]).map((row) => ({
+          id: String(row.id),
+          channelId: String(row.channel_id),
+          authorId: typeof row.author_id === 'string' ? row.author_id : null,
+          authorName: typeof row.author_name === 'string' && row.author_name ? row.author_name : 'Leitor(a)',
+          authorUsername: typeof row.author_username === 'string' ? row.author_username : null,
+          authorAvatarUrl: typeof row.author_avatar_url === 'string' ? row.author_avatar_url : null,
+          content: String(row.content ?? ''),
+          replyToId: typeof row.reply_to_id === 'string' ? row.reply_to_id : null,
+          videoSec: typeof row.video_sec === 'number' ? row.video_sec : null,
+          version: typeof row.version === 'number' ? row.version : 1,
+          createdAt: String(row.created_at ?? ''),
+          editedAt: typeof row.edited_at === 'string' ? row.edited_at : null,
         }));
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));

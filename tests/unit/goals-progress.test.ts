@@ -18,10 +18,13 @@ describe('Goals progress contract', () => {
     const goal: ReadingGoal = {
       id: 'g-1',
       user_id: 'u-1',
+      title: 'Meta 2026',
       year: 2026,
       target_books: 12,
       target_pages: 3600,
       target_minutes: 6000,
+      version: 1,
+      archived_at: null,
     };
     const progress: ReadingGoalProgress = {
       goal_id: 'g-1',

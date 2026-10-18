@@ -80,6 +80,25 @@ export function YouTubeFacade({
           </p>
         </div>
       )}
+      {videoId && (
+        <p
+          className="field-hint video-spoiler-notice"
+          style={{
+            marginTop: '8px',
+            fontSize: '0.8125rem',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <span aria-hidden="true">🛡️</span>
+          <span>
+            <strong>Atenção com spoilers:</strong> As recomendações automáticas de vídeos ao final
+            da reprodução no YouTube podem conter thumbnails ou títulos com revelações da trama de outros canais.
+          </span>
+        </p>
+      )}
     </div>
   );
 }

@@ -402,6 +402,12 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
+
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+          <Link className="btn btn-secondary btn-sm" href="/ranking">
+            Ver ranking da comunidade de leitores ↗
+          </Link>
+        </div>
       </section>
 
       {/* 7. Catálogo / Biblioteca Geral */}

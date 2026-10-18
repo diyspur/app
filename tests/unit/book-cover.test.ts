@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+// @ts-expect-error nextConfig is an untyped mjs module
 import nextConfig from '../../next.config.mjs';
 
 describe('Book Cover Configuration & Patterns (QA-05)', () => {

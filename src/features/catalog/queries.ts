@@ -185,7 +185,7 @@ export const getActiveSeason = cache(async (): Promise<ActiveSeasonInfo | null> 
   return {
     season: season as Season,
     book: bookResult.data,
-    totalChapters: chapters.length || (bookResult.data?.total_chapters ?? 0),
+    totalChapters: Math.max(bookResult.data?.total_chapters ?? 0, chapters.length),
     publishedChapters: published,
     nextMeeting: (meetingsResult.data as Meeting | null) ?? null,
   };
@@ -238,7 +238,7 @@ export const getChapters = cache(async (id: string) => {
     return null;
   }
   const [season, comments, progress, chapterList, accessResult, meetings, questions, hostPrompt, hostPromptResult, hostPromptVote] = await Promise.all([
-    client.from('seasons').select('id,title,slug,book_id,status').eq('id', chapter.season_id).maybeSingle(),
+    client.from('seasons').select('id,number,title,slug,book_id,status').eq('id', chapter.season_id).maybeSingle(),
     client.from('v_comments_visible').select('id,chapter_id,user_id,content,is_spoiler,is_locked,created_at').eq('chapter_id', id).order('created_at', { ascending: true }).limit(50),
     claims?.claims?.sub ? client.from('user_progress').select('status,percent').eq('user_id', String(claims.claims.sub)).eq('chapter_id', id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     client.from('chapters').select('id,number,title,published_at').eq('season_id', chapter.season_id).or(`published_at.is.null,published_at.lte.${new Date().toISOString()}`).order('number', { ascending: true }),

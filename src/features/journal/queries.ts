@@ -9,9 +9,11 @@ export type JournalEntry = {
   body: string;
   page_from: number | null;
   page_to: number | null;
+  percent_at: number | null;
   minutes_read: number | null;
   is_spoiler: boolean;
   archived_at: string | null;
+  version: number;
 };
 
 const cursorSchema = z.object({
@@ -49,7 +51,7 @@ export async function getJournalEntries(
   const pageSize = Math.min(Math.max(Math.trunc(limit), 1), 50);
   let query = client
     .from('reading_journal_entries')
-    .select('id,book_id,entry_date,title,body,page_from,page_to,minutes_read,is_spoiler,archived_at')
+    .select('id,book_id,entry_date,title,body,page_from,page_to,percent_at,minutes_read,is_spoiler,archived_at,version')
     .eq('user_id', userId);
 
   if (archivedOnly) {

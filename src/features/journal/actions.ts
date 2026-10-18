@@ -4,28 +4,19 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireSession } from '@/lib/auth/session';
 import { mapDatabaseError } from '@/lib/actions/database-errors';
-
-const schema = z.object({
-  bookId: z.string().uuid(),
-  chapterId: z.string().uuid().nullable(),
-  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  title: z.string().trim().max(160),
-  body: z.string().trim().min(1).max(20000),
-  pageFrom: z.coerce.number().int().positive().nullable(),
-  pageTo: z.coerce.number().int().positive().nullable(),
-  percentAt: z.coerce.number().min(0).max(100).nullable(),
-  minutesRead: z.coerce.number().int().min(0).max(1440).nullable(),
-  isSpoiler: z.boolean(),
-}).strict();
+import { createJournalSchema, updateJournalSchema } from './schemas';
 
 export async function createJournalEntry(input: unknown) {
-  const parsed = schema.safeParse(input);
+  const parsed = createJournalSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: 'Confira o livro, a data e o texto do registro.', code: 'validation' as const };
+    const firstIssue = parsed.error.issues[0]?.message;
+    return {
+      ok: false,
+      message: firstIssue ?? 'Confira o livro, a data e o texto do registro.',
+      code: 'validation' as const,
+    };
   }
-  if (parsed.data.pageFrom && parsed.data.pageTo && parsed.data.pageTo < parsed.data.pageFrom) {
-    return { ok: false, message: 'A página final precisa ser maior ou igual à inicial.', code: 'validation' as const };
-  }
+
   const session = await requireSession();
   if (!session) {
     return { ok: false, message: 'Entre para escrever no seu diário.', code: 'unauthenticated' as const };
@@ -34,13 +25,13 @@ export async function createJournalEntry(input: unknown) {
   const { error } = await session.client.from('reading_journal_entries').insert({
     user_id: session.userId,
     book_id: parsed.data.bookId,
-    chapter_id: parsed.data.chapterId,
+    chapter_id: parsed.data.chapterId ?? null,
     entry_date: parsed.data.entryDate,
     title: parsed.data.title || null,
     body: parsed.data.body,
-    page_from: parsed.data.pageFrom,
-    page_to: parsed.data.pageTo,
-    percent_at: parsed.data.percentAt,
+    page_from: parsed.data.pageFrom ?? null,
+    page_to: parsed.data.pageTo ?? null,
+    percent_at: parsed.data.percentAt ?? null,
     minutes_read: parsed.data.minutesRead ?? 0,
     is_spoiler: parsed.data.isSpoiler,
     visibility: 'private',
@@ -49,6 +40,55 @@ export async function createJournalEntry(input: unknown) {
   if (error) return { ok: false, ...mapDatabaseError(error.code) };
   revalidatePath('/diario');
   return { ok: true, message: 'Registro salvo no seu diário.' };
+}
+
+export async function updateJournalEntry(input: unknown) {
+  const parsed = updateJournalSchema.safeParse(input);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0]?.message;
+    return {
+      ok: false,
+      message: firstIssue ?? 'Confira os dados do registro.',
+      code: 'validation' as const,
+    };
+  }
+
+  const session = await requireSession();
+  if (!session) {
+    return { ok: false, message: 'Entre para editar seu diário.', code: 'unauthenticated' as const };
+  }
+
+  let query = session.client
+    .from('reading_journal_entries')
+    .update({
+      entry_date: parsed.data.entryDate,
+      title: parsed.data.title || null,
+      body: parsed.data.body,
+      page_from: parsed.data.pageFrom ?? null,
+      page_to: parsed.data.pageTo ?? null,
+      percent_at: parsed.data.percentAt ?? null,
+      minutes_read: parsed.data.minutesRead ?? 0,
+      is_spoiler: parsed.data.isSpoiler,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', parsed.data.id)
+    .eq('user_id', session.userId);
+
+  if (parsed.data.expectedVersion) {
+    query = query.eq('version', parsed.data.expectedVersion);
+  }
+
+  const { data, error } = await query.select('id').maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: 'Registro não encontrado, modificado recentemente ou sem permissão para edição.',
+    };
+  }
+
+  revalidatePath('/diario');
+  return { ok: true, message: 'Registro atualizado no seu diário.' };
 }
 
 async function setArchived(id: string, archived: boolean) {

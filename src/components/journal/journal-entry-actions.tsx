@@ -4,7 +4,17 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { archiveJournalEntry, restoreJournalEntry } from '@/features/journal/actions';
 
-export function JournalEntryActions({ id, archived = false }: { id: string; archived?: boolean }) {
+export function JournalEntryActions({
+  id,
+  archived = false,
+  onEdit,
+  isEditing = false,
+}: {
+  id: string;
+  archived?: boolean;
+  onEdit?: () => void;
+  isEditing?: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState('');
   const router = useRouter();
@@ -20,7 +30,17 @@ export function JournalEntryActions({ id, archived = false }: { id: string; arch
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      {!archived && onEdit && (
+        <button
+          className="button button-quiet button-small"
+          type="button"
+          onClick={onEdit}
+          disabled={pending}
+        >
+          {isEditing ? 'Cancelar' : 'Editar'}
+        </button>
+      )}
       <button
         className="button button-quiet button-small"
         type="button"

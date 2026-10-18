@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/session';
 import { JournalEntryForm } from '@/components/journal/journal-entry-form';
-import { JournalEntryActions } from '@/components/journal/journal-entry-actions';
+import { JournalEntryItem } from '@/components/journal/journal-entry-item';
 import { getJournalEntries } from '@/features/journal/queries';
 
 type BookOption = { id: string; title: string };
@@ -83,27 +83,11 @@ export default async function JournalPage({
           <>
             <div className="timeline">
               {entries.map((entry) => (
-                <article className="member-card" key={entry.id}>
-                  <div className="section-head">
-                    <span className="eyebrow">
-                      {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(
-                        new Date(`${entry.entry_date}T12:00:00`),
-                      )}
-                    </span>
-                    <JournalEntryActions id={entry.id} archived={Boolean(entry.archived_at)} />
-                  </div>
-                  <h3>
-                    {entry.title || bookMap.get(entry.book_id) || 'Registro de leitura'}
-                  </h3>
-                  <p style={{ whiteSpace: 'pre-wrap' }}>{entry.body}</p>
-                  <p className="field-hint">
-                    {bookMap.get(entry.book_id) ?? 'Livro'}
-                    {entry.page_from ? ` · páginas ${entry.page_from}${entry.page_to ? `–${entry.page_to}` : ''}` : ''}
-                    {entry.minutes_read ? ` · ${entry.minutes_read} min` : ''}
-                    {entry.is_spoiler ? ' · spoiler marcado' : ''}
-                    {entry.archived_at ? ' · arquivado' : ''}
-                  </p>
-                </article>
+                <JournalEntryItem
+                  key={entry.id}
+                  entry={entry}
+                  bookTitle={bookMap.get(entry.book_id) ?? 'Livro'}
+                />
               ))}
             </div>
             {journal.nextCursor && (

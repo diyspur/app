@@ -211,18 +211,36 @@ export const getUpcomingMeetings = cache(async (limit: number = 6): Promise<Meet
 
 export const getMeetings = cache(async (): Promise<Meeting[]> => {
   const client = await createServerSupabase();
-  const { data, error } = await client
-    .from('meetings')
-    .select(
-      'id,chapter_id,book_id,club_id,title,status,kind,scheduled_at,duration_min,meeting_url,location,agenda,spoiler_policy,version,books(id,slug,title),user_clubs(id,slug,name)',
-    )
-    .order('scheduled_at')
-    .limit(36);
-  if (error) {
-    console.error('Meetings query failed', error.code);
-    return [];
+  const now = new Date().toISOString();
+  const [upcomingResult, pastResult] = await Promise.all([
+    client
+      .from('meetings')
+      .select(
+        'id,chapter_id,book_id,club_id,title,status,kind,scheduled_at,duration_min,meeting_url,location,agenda,spoiler_policy,version,books(id,slug,title),user_clubs(id,slug,name)',
+      )
+      .gte('scheduled_at', now)
+      .order('scheduled_at', { ascending: true })
+      .limit(30),
+    client
+      .from('meetings')
+      .select(
+        'id,chapter_id,book_id,club_id,title,status,kind,scheduled_at,duration_min,meeting_url,location,agenda,spoiler_policy,version,books(id,slug,title),user_clubs(id,slug,name)',
+      )
+      .lt('scheduled_at', now)
+      .order('scheduled_at', { ascending: false })
+      .limit(20),
+  ]);
+
+  if (upcomingResult.error) {
+    console.error('Upcoming meetings query failed', upcomingResult.error.code);
   }
-  return (data ?? []) as unknown as Meeting[];
+  if (pastResult.error) {
+    console.error('Past meetings query failed', pastResult.error.code);
+  }
+
+  const upcoming = (upcomingResult.data ?? []) as unknown as Meeting[];
+  const past = (pastResult.data ?? []) as unknown as Meeting[];
+  return [...upcoming, ...past];
 });
 
 export const getChapters = cache(async (id: string) => {

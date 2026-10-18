@@ -15,11 +15,16 @@ export async function GET() {
       profileRes,
       journalRes,
       listsRes,
+      listItemsRes,
+      listCollabsRes,
+      upNextRes,
       progressRes,
       rsvpsRes,
       clubsRes,
       bookReadingsRes,
       clubMessagesRes,
+      quizAttemptsRes,
+      achievementsRes,
       channelConsentsRes,
       channelPrefsRes,
       notifPrefsRes,
@@ -41,6 +46,22 @@ export async function GET() {
         .select('id,slug,title,description,visibility,is_collaborative,created_at')
         .eq('owner_id', userId)
         .limit(50),
+      client
+        .from('reading_list_items')
+        .select('id,list_id,kind,book_id,chapter_id,position,created_at')
+        .eq('added_by', userId)
+        .limit(500),
+      client
+        .from('reading_list_collaborators')
+        .select('list_id,can_edit,added_at')
+        .eq('user_id', userId)
+        .limit(100),
+      client
+        .from('user_up_next')
+        .select('book_id,position,added_at')
+        .eq('user_id', userId)
+        .order('position', { ascending: true })
+        .limit(200),
       client
         .from('user_progress')
         .select('chapter_id,percent,updated_at')
@@ -69,6 +90,17 @@ export async function GET() {
         .order('created_at', { ascending: false })
         .limit(500),
       client
+        .from('quiz_attempts')
+        .select('id,quiz_id,score,passed,created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(200),
+      client
+        .from('user_achievements')
+        .select('achievement_id,unlocked_at')
+        .eq('user_id', userId)
+        .limit(200),
+      client
         .from('club_channel_consents')
         .select('channel_id,rules_version,accepted_at')
         .eq('user_id', userId)
@@ -95,19 +127,51 @@ export async function GET() {
     if (profileRes.error) failedSections.push('profile');
     if (journalRes.error) failedSections.push('journalEntries');
     if (listsRes.error) failedSections.push('readingLists');
+    if (listItemsRes.error) failedSections.push('readingListItems');
+    if (listCollabsRes.error) failedSections.push('readingListCollaborations');
+    if (upNextRes.error) failedSections.push('upNextQueue');
     if (progressRes.error) failedSections.push('readingProgress');
     if (rsvpsRes.error) failedSections.push('meetingRsvps');
     if (clubsRes.error) failedSections.push('clubMemberships');
     if (bookReadingsRes.error) failedSections.push('bookReadings');
     if (clubMessagesRes.error) failedSections.push('communityMessages');
+    if (quizAttemptsRes.error) failedSections.push('quizAttempts');
+    if (achievementsRes.error) failedSections.push('achievements');
     if (channelConsentsRes.error) failedSections.push('channelConsents');
     if (channelPrefsRes.error) failedSections.push('channelPreferences');
     if (notifPrefsRes.error) failedSections.push('notificationPreferences');
     if (goalsRes.error) failedSections.push('readingGoals');
 
+    const exportedAt = new Date().toISOString();
+    const status = failedSections.length === 0 ? 'complete' : 'partial';
+
     const payload = {
-      exportedAt: new Date().toISOString(),
-      status: failedSections.length === 0 ? 'complete' : 'partial',
+      manifest: {
+        userId,
+        exportedAt,
+        status,
+        failedSections: failedSections.length > 0 ? failedSections : undefined,
+        counts: {
+          readingGoals: (goalsRes.data ?? []).length,
+          journalEntries: (journalRes.data ?? []).length,
+          readingLists: (listsRes.data ?? []).length,
+          readingListItems: (listItemsRes.data ?? []).length,
+          readingListCollaborations: (listCollabsRes.data ?? []).length,
+          upNextItems: (upNextRes.data ?? []).length,
+          readingProgress: (progressRes.data ?? []).length,
+          bookReadings: (bookReadingsRes.data ?? []).length,
+          meetingRsvps: (rsvpsRes.data ?? []).length,
+          clubMemberships: (clubsRes.data ?? []).length,
+          communityMessages: (clubMessagesRes.data ?? []).length,
+          quizAttempts: (quizAttemptsRes.data ?? []).length,
+          achievements: (achievementsRes.data ?? []).length,
+          channelConsents: (channelConsentsRes.data ?? []).length,
+          channelPreferences: (channelPrefsRes.data ?? []).length,
+        },
+        truncated: false,
+      },
+      exportedAt,
+      status,
       failedSections: failedSections.length > 0 ? failedSections : undefined,
       account: {
         id: userId,
@@ -116,11 +180,16 @@ export async function GET() {
       readingGoals: goalsRes.data ?? [],
       journalEntries: journalRes.data ?? [],
       readingLists: listsRes.data ?? [],
+      readingListItems: listItemsRes.data ?? [],
+      readingListCollaborations: listCollabsRes.data ?? [],
+      upNextQueue: upNextRes.data ?? [],
       readingProgress: progressRes.data ?? [],
       bookReadings: bookReadingsRes.data ?? [],
       meetingRsvps: rsvpsRes.data ?? [],
       clubMemberships: clubsRes.data ?? [],
       communityMessages: clubMessagesRes.data ?? [],
+      quizAttempts: quizAttemptsRes.data ?? [],
+      achievements: achievementsRes.data ?? [],
       channelConsents: channelConsentsRes.data ?? [],
       channelPreferences: channelPrefsRes.data ?? [],
       notificationPreferences: notifPrefsRes.data ?? null,

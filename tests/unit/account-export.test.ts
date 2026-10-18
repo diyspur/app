@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/clients', () => ({
   createServerSupabase: vi.fn(),
 }));
 
-describe('Account Data Export (QA-11)', () => {
+describe('Account Data Export (QA-14)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -22,7 +22,7 @@ describe('Account Data Export (QA-11)', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns valid JSON with schema-aligned projections and complete status', async () => {
+  it('returns valid JSON with schema-aligned projections, manifest and complete status', async () => {
     const mockFrom = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -55,8 +55,20 @@ describe('Account Data Export (QA-11)', () => {
     const json = await response.json();
     expect(json.account.id).toBe('user-1');
     expect(json.status).toBe('complete');
+    expect(json.manifest).toBeDefined();
+    expect(json.manifest.userId).toBe('user-1');
+    expect(json.manifest.status).toBe('complete');
+    expect(json.manifest.truncated).toBe(false);
+    expect(json.manifest.counts).toBeDefined();
     expect(json).toHaveProperty('readingGoals');
+    expect(json).toHaveProperty('readingListItems');
+    expect(json).toHaveProperty('readingListCollaborations');
+    expect(json).toHaveProperty('upNextQueue');
+    expect(json).toHaveProperty('quizAttempts');
+    expect(json).toHaveProperty('achievements');
     expect(json).toHaveProperty('communityMessages');
     expect(json).toHaveProperty('channelConsents');
+    expect(json).toHaveProperty('channelPreferences');
+    expect(json).toHaveProperty('notificationPreferences');
   });
 });

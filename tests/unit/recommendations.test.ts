@@ -14,6 +14,10 @@ import {
 } from '@/features/recommendations/tensorflow-recommender';
 import {
   computeNativeRecommendations,
+  rankCatalogBooksNative,
+  applyMMR,
+  generateRecommendationReason,
+  formatRecommendationTag,
 } from '@/features/recommendations/native-recommender';
 
 describe('TensorFlow.js Book Recommendation Engine', () => {
@@ -386,6 +390,36 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
 
       expect(card).toBeDefined();
       expect(card.props.href).toBe('/livros/a-garota-no-trem');
+    });
+
+    it('renders recommendation reason in BookCard when book.recommendationReason is present', async () => {
+      const { BookCard } = await import('@/components/book-card');
+      const recommendedBook = {
+        ...bookA,
+        isRecommended: true,
+        recommendationReason: 'Do mesmo autor de Verity',
+      };
+      const card = BookCard({ book: recommendedBook });
+
+      expect(card).toBeDefined();
+      const children = card.props.children;
+      // Index 3 is the reason paragraph
+      const reasonParagraph = children.find(
+        (child: any) => child?.props?.className === 'book-card-reason',
+      );
+      expect(reasonParagraph).toBeDefined();
+      expect(reasonParagraph.props.children).toBe('Do mesmo autor de Verity');
+      expect(reasonParagraph.props.title).toBe('Do mesmo autor de Verity');
+
+      // The tag-recommended badge also contains the reason in its title and aria-label
+      const tagsContainer = children.find(
+        (child: any) => child?.props?.className === 'book-card-tags',
+      );
+      const recommendedBadge = tagsContainer.props.children.find(
+        (child: any) => child?.props?.className?.includes('tag-recommended'),
+      );
+      expect(recommendedBadge.props.title).toBe('Do mesmo autor de Verity');
+      expect(recommendedBadge.props['aria-label']).toContain('Do mesmo autor de Verity');
     });
   });
 
@@ -791,6 +825,167 @@ describe('TensorFlow.js Book Recommendation Engine', () => {
       const rawBookVec = vectorizeBook(bookA, vocab, false);
       const rawL2 = Math.sqrt(rawBookVec.reduce((sum, v) => sum + v * v, 0));
       expect(rawL2).toBeGreaterThan(1.0);
+    });
+  });
+
+  describe('MMR Diversity Reranking (Maximal Marginal Relevance) (Task 3.3)', () => {
+    // Setup a scenario with monopoly risk:
+    // User read bookA (author1, tags: ['Suspense', 'Thriller'])
+    // Candidates contain 4 books by author1 (tags: ['Suspense'])
+    // and 1 book by author2 (tags: ['Suspense', 'Mistério'])
+    const auth1Cand1 = mockBook('c-a1', 'Auth1 Thriller 1', author1, ['Suspense', 'Thriller']);
+    const auth1Cand2 = mockBook('c-a2', 'Auth1 Thriller 2', author1, ['Suspense', 'Thriller']);
+    const auth1Cand3 = mockBook('c-a3', 'Auth1 Thriller 3', author1, ['Suspense', 'Thriller']);
+    const auth1Cand4 = mockBook('c-a4', 'Auth1 Thriller 4', author1, ['Suspense', 'Thriller']);
+    const auth2Cand1 = mockBook('c-b1', 'Auth2 Mystery 1', author2, ['Mistério']);
+
+    const monopolyCatalog = [auth1Cand1, auth1Cand2, auth1Cand3, auth1Cand4, auth2Cand1];
+    const userReadings = new Map<string, BookReadingStatus>([
+      [bookA.id, 'reading'],
+      [bookB.id, 'read'],
+    ]);
+    const historyBooks = [bookA, bookB];
+
+    it('demonstrates monopoly without MMR (all author1 books come before author2)', () => {
+      const ranked = rankCatalogBooksNative(monopolyCatalog, userReadings, {
+        externalHistoryBooks: historyBooks,
+        enableMMR: false,
+      });
+
+      // Without MMR, author1 bonus (reading status 1.25) causes all 4 author1 books to precede auth2Cand1
+      expect(ranked.slice(0, 4).map((b) => b.id)).toEqual([
+        auth1Cand1.id,
+        auth1Cand2.id,
+        auth1Cand3.id,
+        auth1Cand4.id,
+      ]);
+      expect(ranked[4].id).toBe(auth2Cand1.id);
+    });
+
+    it('diversifies candidate list preventing single author or genre monopoly when enableMMR is true', () => {
+      // With Native Engine
+      const nativeRanked = rankCatalogBooksNative(monopolyCatalog, userReadings, {
+        externalHistoryBooks: historyBooks,
+        enableMMR: true,
+        diversityLambda: 0.75,
+      });
+
+      // Position 0 is still the most relevant author1 book
+      expect(nativeRanked[0].id).toBe(auth1Cand1.id);
+      // But position 1 is diversified to author2 book because redundant author1 books receive similarity penalty
+      expect(nativeRanked[1].id).toBe(auth2Cand1.id);
+
+      // With TensorFlow Engine
+      const tfRanked = rankCatalogBooks(monopolyCatalog, userReadings, {
+        externalHistoryBooks: historyBooks,
+        enableMMR: true,
+        diversityLambda: 0.75,
+      });
+
+      expect(tfRanked[0].id).toBe(auth1Cand1.id);
+      expect(tfRanked[1].id).toBe(auth2Cand1.id);
+    });
+
+    it('respects diversityLambda: lambda = 1.0 prioritizes relevance, lambda = 0.5 prioritizes diversity', () => {
+      // lambda = 1.0: Pure relevance (no diversity penalty)
+      const pureRelevance = rankCatalogBooksNative(monopolyCatalog, userReadings, {
+        externalHistoryBooks: historyBooks,
+        enableMMR: true,
+        diversityLambda: 1.0,
+      });
+      expect(pureRelevance[4].id).toBe(auth2Cand1.id);
+
+      // lambda = 0.5: Strong diversity
+      const highDiversity = rankCatalogBooksNative(monopolyCatalog, userReadings, {
+        externalHistoryBooks: historyBooks,
+        enableMMR: true,
+        diversityLambda: 0.5,
+      });
+      expect(highDiversity[1].id).toBe(auth2Cand1.id);
+    });
+
+    it('applyMMR handles edge cases gracefully (single item, empty list, all identical)', () => {
+      const vocab = buildFeatureVocabulary([bookA, bookB]);
+      const single = [{ ...bookA, recommendationScore: 0.9 }];
+      expect(applyMMR(single, vocab)).toEqual(single);
+      expect(applyMMR([], vocab)).toEqual([]);
+    });
+  });
+
+  describe('Explainable Recommendations (recommendationReason) (Task 3.3)', () => {
+    it('generates "Do mesmo autor de [Título]" when author is the dominant contributor from reading history', () => {
+      // User read bookA ('Verity', author1, ['Suspense'])
+      // Candidate bookE ('Gothic Mystery', author1, ['Gótico'])
+      const userReadings = new Map<string, BookReadingStatus>([[bookA.id, 'read']]);
+      const ranked = rankCatalogBooksNative([bookE], userReadings, {
+        externalHistoryBooks: [bookA],
+      });
+
+      expect(ranked[0].isRecommended).toBe(true);
+      expect(ranked[0].recommendationReason).toBe('Do mesmo autor de Verity');
+
+      // Verify TensorFlow engine also yields identical reason
+      const tfRanked = rankCatalogBooks([bookE], userReadings, {
+        externalHistoryBooks: [bookA],
+      });
+      expect(tfRanked[0].recommendationReason).toBe('Do mesmo autor de Verity');
+    });
+
+    it('generates "Recomendado por afinidade com [Tag]" when dominant contributor is a shared tag', () => {
+      // User read bookA ('Verity', author1, ['Suspense', 'Psicológico'])
+      // Candidate bookB ('A Garota no Trem', author2, ['Suspense', 'Mistério'])
+      // Author is different, so shared tag 'Suspense' dominates
+      const userReadings = new Map<string, BookReadingStatus>([[bookA.id, 'read']]);
+      const ranked = rankCatalogBooksNative([bookB], userReadings, {
+        externalHistoryBooks: [bookA],
+      });
+
+      expect(ranked[0].isRecommended).toBe(true);
+      expect(ranked[0].recommendationReason).toBe('Recomendado por afinidade com Suspense');
+
+      const tfRanked = rankCatalogBooks([bookB], userReadings, {
+        externalHistoryBooks: [bookA],
+      });
+      expect(tfRanked[0].recommendationReason).toBe('Recomendado por afinidade com Suspense');
+    });
+
+    it('generates "Com base no seu interesse em [Tag]" when recommendation is driven by browser interactions', () => {
+      // User has no reading history, but interacted with a sci-fi book in browser
+      const candidateSciFi = mockBook('c-sci', 'Duna', author3, ['Ficção Científica']);
+      const ranked = rankCatalogBooksNative([candidateSciFi], null, {
+        interactions: [
+          {
+            bookId: 'interacted-1',
+            title: 'Fundação',
+            slug: 'fundacao',
+            tags: ['Ficção Científica'],
+            author_id: author2,
+            timestamp: Date.now(),
+            type: 'click',
+          },
+        ],
+      });
+
+      expect(ranked[0].isRecommended).toBe(true);
+      expect(ranked[0].recommendationReason).toBe('Com base no seu interesse em Ficção Científica');
+    });
+
+    it('does not attach recommendationReason to unrecommended books (score < threshold)', () => {
+      // User read Romance bookD. bookC is 'It: A Coisa' (Terror), having ~0 similarity
+      const userReadings = new Map<string, BookReadingStatus>([[bookD.id, 'read']]);
+      const ranked = rankCatalogBooksNative([bookC], userReadings, {
+        externalHistoryBooks: [bookD],
+      });
+
+      expect(ranked[0].isRecommended).toBe(false);
+      expect(ranked[0].recommendationReason).toBeUndefined();
+    });
+
+    it('formatRecommendationTag formats multi-word tags with clean capitalization', () => {
+      expect(formatRecommendationTag('suspense psicológico')).toBe('Suspense Psicológico');
+      expect(formatRecommendationTag('  ficção científica  ')).toBe('Ficção Científica');
+      expect(formatRecommendationTag('romance')).toBe('Romance');
+      expect(formatRecommendationTag('')).toBe('');
     });
   });
 });

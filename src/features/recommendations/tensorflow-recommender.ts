@@ -6,13 +6,21 @@ import type {
   IndexedVocabulary,
   RecommendationOptions,
   ScoredBook,
+  BookInteraction,
 } from './types';
+import {
+  applyMMR,
+  generateRecommendationReason,
+  type ReasonGenerationContext,
+} from './native-recommender';
 
 const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBooks' | 'interactions'>> = {
   recommendationThreshold: 0.15,
   readingWeight: 1.25,
   readWeight: 1.0,
   interactionWeight: 0.8,
+  enableMMR: false,
+  diversityLambda: 0.75,
 };
 
 /**
@@ -122,20 +130,43 @@ export function vectorizeBook(
   return normalize ? normalizeVector(vector) : vector;
 }
 
+export interface TensorFlowRecommendationDetails {
+  scores: Map<string, number>;
+  reasons: Map<string, string>;
+  vocab: IndexedVocabulary;
+  normalizedUserProfile: number[];
+  candidateVectors: Map<string, number[]>;
+}
+
 /**
- * Computes cosine similarity between candidate books and user reading history using TensorFlow.js.
- * All tensor allocations are executed inside tf.tidy() to prevent memory leaks.
+ * Computes recommendations and feature breakdown details using TensorFlow.js for explanation and MMR reranking.
  */
-export function computeTensorFlowRecommendations(
+export function computeTensorFlowRecommendationsWithDetails(
   candidates: Book[],
   historyBooks: { book: Book; status: 'read' | 'reading' }[],
   options?: RecommendationOptions,
-): Map<string, number> {
-  const scoresMap = new Map<string, number>();
+): TensorFlowRecommendationDetails {
+  const scores = new Map<string, number>();
+  const reasons = new Map<string, string>();
+  const candidateVectorsMap = new Map<string, number[]>();
+  const emptyVocab: IndexedVocabulary = {
+    tags: [],
+    authorIds: [],
+    tagIndexMap: new Map(),
+    authorIndexMap: new Map(),
+    tagIdfMap: new Map(),
+  };
+
   const interactions = options?.interactions ?? [];
 
   if (!candidates.length || (!historyBooks.length && !interactions.length)) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab: emptyVocab,
+      normalizedUserProfile: [],
+      candidateVectors: candidateVectorsMap,
+    };
   }
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -170,12 +201,18 @@ export function computeTensorFlowRecommendations(
   const featureDim = vocab.tags.length + vocab.authorIds.length;
 
   if (featureDim === 0) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab,
+      normalizedUserProfile: [],
+      candidateVectors: candidateVectorsMap,
+    };
   }
 
-  // Construct user profile vector as weighted sum of read, reading & interacted books
-  // Each history/interaction book is normalized to unit length before weighting and accumulation
   const userProfile = new Array<number>(featureDim).fill(0);
+  const historyWeightVector = new Array<number>(featureDim).fill(0);
+  const interactionWeightVector = new Array<number>(featureDim).fill(0);
   let hasValidSignal = false;
 
   for (const item of historyBooks) {
@@ -183,7 +220,9 @@ export function computeTensorFlowRecommendations(
     const bookVec = vectorizeBook(item.book, vocab, true);
     for (let i = 0; i < featureDim; i++) {
       if (bookVec[i] > 0) {
-        userProfile[i] += bookVec[i] * weight;
+        const val = bookVec[i] * weight;
+        userProfile[i] += val;
+        historyWeightVector[i] += val;
         hasValidSignal = true;
       }
     }
@@ -197,7 +236,9 @@ export function computeTensorFlowRecommendations(
       const bookVec = vectorizeBook(b, vocab, true);
       for (let i = 0; i < featureDim; i++) {
         if (bookVec[i] > 0) {
-          userProfile[i] += bookVec[i] * interactionWeight;
+          const val = bookVec[i] * interactionWeight;
+          userProfile[i] += val;
+          interactionWeightVector[i] += val;
           hasValidSignal = true;
         }
       }
@@ -205,14 +246,23 @@ export function computeTensorFlowRecommendations(
   }
 
   if (!hasValidSignal) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab,
+      normalizedUserProfile: [],
+      candidateVectors: candidateVectorsMap,
+    };
   }
 
   const normalizedUserProfile = normalizeVector(userProfile);
   const candidateVectors = candidates.map((b) => vectorizeBook(b, vocab));
+  candidates.forEach((c, idx) => {
+    candidateVectorsMap.set(c.id, candidateVectors[idx]);
+  });
 
   try {
-    const scores = tf.tidy(() => {
+    const rawScores = tf.tidy(() => {
       // User tensor: shape [1, featureDim]
       const userTensor = tf.tensor2d([normalizedUserProfile], [1, featureDim]);
       // Candidates tensor: shape [numCandidates, featureDim]
@@ -236,13 +286,49 @@ export function computeTensorFlowRecommendations(
     });
 
     candidates.forEach((candidate, idx) => {
-      scoresMap.set(candidate.id, scores[idx] ?? 0);
+      scores.set(candidate.id, rawScores[idx] ?? 0);
     });
   } catch (error) {
     console.warn('[TensorFlow Recommender] Erro ao calcular afinidade vetorial:', error);
   }
 
-  return scoresMap;
+  const reasonCtx: ReasonGenerationContext = {
+    vocab,
+    normalizedUserProfile,
+    historyWeightVector,
+    interactionWeightVector,
+    historyBooks,
+    interactions,
+  };
+
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const candidate = candidates[idx];
+    const score = scores.get(candidate.id) ?? 0;
+    if (score >= opts.recommendationThreshold) {
+      const reason = generateRecommendationReason(candidate, candidateVectors[idx], reasonCtx);
+      reasons.set(candidate.id, reason);
+    }
+  }
+
+  return {
+    scores,
+    reasons,
+    vocab,
+    normalizedUserProfile,
+    candidateVectors: candidateVectorsMap,
+  };
+}
+
+/**
+ * Computes cosine similarity between candidate books and user reading history using TensorFlow.js.
+ * All tensor allocations are executed inside tf.tidy() to prevent memory leaks.
+ */
+export function computeTensorFlowRecommendations(
+  candidates: Book[],
+  historyBooks: { book: Book; status: 'read' | 'reading' }[],
+  options?: RecommendationOptions,
+): Map<string, number> {
+  return computeTensorFlowRecommendationsWithDetails(candidates, historyBooks, options).scores;
 }
 
 /**
@@ -310,24 +396,48 @@ export function rankCatalogBooks(
   let scoredCandidates: ScoredBook[] = [];
 
   if ((historyBooks.length > 0 || hasInteractions) && candidates.length > 0) {
-    const scores = computeTensorFlowRecommendations(candidates, historyBooks, opts);
+    const details = computeTensorFlowRecommendationsWithDetails(candidates, historyBooks, opts);
+    const { scores, reasons, vocab } = details;
 
     scoredCandidates = candidates.map((book) => {
       const score = scores.get(book.id) ?? 0;
       const status = readings.get(book.id);
+      const isRecommended = score >= opts.recommendationThreshold;
       return {
         ...book,
         readingStatus: status ?? undefined,
         recommendationScore: score,
-        isRecommended: score >= opts.recommendationThreshold,
+        isRecommended,
+        recommendationReason: isRecommended ? reasons.get(book.id) : undefined,
       };
     });
 
-    // Sort candidates: highest score first; preserve original order on ties
-    scoredCandidates.sort((a, b) => {
-      const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
-      return Math.abs(diff) > 0.0001 ? diff : 0;
-    });
+    const shouldApplyMMR =
+      options?.enableMMR === true ||
+      (options?.diversityLambda !== undefined && options?.enableMMR !== false);
+    const lambda = opts.diversityLambda;
+
+    if (shouldApplyMMR) {
+      const recommended = scoredCandidates.filter((b) => b.isRecommended);
+      const unrecommended = scoredCandidates.filter((b) => !b.isRecommended);
+
+      unrecommended.sort((a, b) => {
+        const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
+        return Math.abs(diff) > 0.0001 ? diff : 0;
+      });
+
+      const diversifiedRecommended = applyMMR(recommended, vocab, {
+        diversityLambda: lambda,
+      });
+
+      scoredCandidates = [...diversifiedRecommended, ...unrecommended];
+    } else {
+      // Sort candidates: highest score first; preserve original order on ties
+      scoredCandidates.sort((a, b) => {
+        const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
+        return Math.abs(diff) > 0.0001 ? diff : 0;
+      });
+    }
   } else {
     scoredCandidates = candidates.map((book) => ({
       ...book,

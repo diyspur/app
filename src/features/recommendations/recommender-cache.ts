@@ -4,6 +4,7 @@ export interface CachedRankingMetadata {
   readingStatus?: BookReadingStatus | null;
   isRecommended?: boolean;
   recommendationScore?: number;
+  recommendationReason?: string;
 }
 
 export interface CachedRanking {

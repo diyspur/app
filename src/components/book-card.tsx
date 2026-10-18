@@ -35,9 +35,18 @@ export function BookCard({ book }: { book: Book }) {
       </div>
       <h3>{book.title}</h3>
       <p>{book.authors?.name ?? 'Autor(a) convidado(a)'}</p>
+      {book.isRecommended && book.recommendationReason ? (
+        <p className="book-card-reason" title={book.recommendationReason}>
+          {book.recommendationReason}
+        </p>
+      ) : null}
       <div className="book-card-tags">
         {book.isRecommended ? (
-          <span className="tag tag-recommended" title="Recomendado com base nas suas leituras">
+          <span
+            className="tag tag-recommended"
+            title={book.recommendationReason ?? 'Recomendado com base nas suas leituras'}
+            aria-label={`★ Recomendado${book.recommendationReason ? `: ${book.recommendationReason}` : ''}`}
+          >
             ★ Recomendado
           </span>
         ) : null}

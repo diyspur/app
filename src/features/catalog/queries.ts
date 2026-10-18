@@ -23,6 +23,7 @@ export type Book = {
   readingStatus?: 'want_to_read' | 'reading' | 'read' | 'dnf' | null;
   isRecommended?: boolean;
   recommendationScore?: number;
+  recommendationReason?: string;
 };
 export type Season = { id: string; number: number; title: string; slug: string; book_id: string; status: string; description: string | null; starts_at: string | null; ends_at: string | null; cover_url: string | null };
 export type Chapter = { id: string; season_id: string; number: number; title: string; reading_range: string | null; youtube_url: string | null; summary: string | null; published_at: string | null };
@@ -148,6 +149,7 @@ export const getBooksResult = cache(
         const { rankCatalogBooks } = await import('@/features/recommendations/tensorflow-recommender');
         const rankedBooks = rankCatalogBooks(candidateBooks, userReadingsMap, {
           externalHistoryBooks,
+          enableMMR: true,
         });
 
         total = count ?? rankedBooks.length;
@@ -159,6 +161,7 @@ export const getBooksResult = cache(
               readingStatus: b.readingStatus,
               isRecommended: b.isRecommended,
               recommendationScore: b.recommendationScore,
+              recommendationReason: b.recommendationReason,
             },
           ]),
         );
@@ -209,6 +212,7 @@ export const getBooksResult = cache(
             readingStatus: itemMeta?.readingStatus ?? userReadingsMap?.get(id),
             isRecommended: itemMeta?.isRecommended,
             recommendationScore: itemMeta?.recommendationScore,
+            recommendationReason: itemMeta?.recommendationReason,
           },
         ];
       });

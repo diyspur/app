@@ -5,6 +5,7 @@ import type {
   IndexedVocabulary,
   RecommendationOptions,
   ScoredBook,
+  BookInteraction,
 } from './types';
 
 const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBooks' | 'interactions'>> = {
@@ -12,6 +13,8 @@ const DEFAULT_OPTIONS: Required<Omit<RecommendationOptions, 'externalHistoryBook
   readingWeight: 1.25,
   readWeight: 1.0,
   interactionWeight: 0.8,
+  enableMMR: false,
+  diversityLambda: 0.75,
 };
 
 /**
@@ -143,19 +146,208 @@ export function computeCosineSimilarity(vecA: number[], vecB: number[], epsilon 
 }
 
 /**
- * Computes cosine similarity between candidate books and user reading history using pure JavaScript float operations.
- * Allocates zero tensors and runs synchronously with microsecond latency.
+ * Formats a tag string for user-facing recommendation badges.
+ * Capitalizes the first character of each word.
  */
-export function computeNativeRecommendations(
+export function formatRecommendationTag(tag: string): string {
+  if (!tag) return tag;
+  const trimmed = tag.trim();
+  return trimmed
+    .split(/\s+/)
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : ''))
+    .join(' ');
+}
+
+export interface ReasonGenerationContext {
+  vocab: FeatureVocabulary;
+  normalizedUserProfile: number[];
+  historyWeightVector: number[];
+  interactionWeightVector: number[];
+  historyBooks?: { book: Book; status: 'read' | 'reading' }[];
+  interactions?: BookInteraction[];
+}
+
+/**
+ * Generates an explainable recommendation reason based on the feature with the highest
+ * inner product contribution between the book vector and the user profile.
+ */
+export function generateRecommendationReason(
+  candidate: Book,
+  candidateVector: number[],
+  ctx: ReasonGenerationContext,
+): string {
+  const {
+    vocab,
+    normalizedUserProfile,
+    historyWeightVector,
+    interactionWeightVector,
+    historyBooks,
+    interactions,
+  } = ctx;
+  const numTags = vocab.tags.length;
+  const numAuthors = vocab.authorIds.length;
+  const totalDim = numTags + numAuthors;
+
+  let maxContrib = -1;
+  let maxIdx = -1;
+
+  for (let i = 0; i < totalDim; i++) {
+    const candidateVal = candidateVector[i];
+    const userVal = normalizedUserProfile[i];
+    if (candidateVal > 0 && userVal > 0) {
+      const contrib = candidateVal * userVal;
+      if (contrib > maxContrib) {
+        maxContrib = contrib;
+        maxIdx = i;
+      }
+    }
+  }
+
+  if (maxIdx === -1 || maxContrib <= 0) {
+    return 'Recomendado com base nas suas leituras';
+  }
+
+  // Author match dominant
+  if (maxIdx >= numTags) {
+    const authorId = vocab.authorIds[maxIdx - numTags];
+    const matchingHistoryBook = historyBooks?.find((h) => h.book.author_id === authorId)?.book;
+    if (matchingHistoryBook?.title) {
+      return `Do mesmo autor de ${matchingHistoryBook.title}`;
+    }
+    const matchingInteraction = interactions?.find((it) => it.author_id === authorId);
+    if (matchingInteraction?.title) {
+      return `Do mesmo autor de ${matchingInteraction.title}`;
+    }
+    return 'Do mesmo autor de suas leituras';
+  }
+
+  // Tag match dominant
+  const rawTag = vocab.tags[maxIdx];
+  const matchingCandidateTag = candidate.tags?.find((t) => t.trim().toLowerCase() === rawTag);
+  const displayTag = formatRecommendationTag(matchingCandidateTag ?? rawTag);
+
+  const historyWeight = historyWeightVector[maxIdx] ?? 0;
+  const interactionWeight = interactionWeightVector[maxIdx] ?? 0;
+
+  if (interactionWeight > historyWeight) {
+    return `Com base no seu interesse em ${displayTag}`;
+  }
+
+  return `Recomendado por afinidade com ${displayTag}`;
+}
+
+/**
+ * Reranks candidate books using Maximal Marginal Relevance (MMR) greedy selection:
+ * b* = argmax_{b in C \ S} [ lambda * sim(b, u) - (1 - lambda) * max_{s in S} sim(b, s) ]
+ *
+ * Balances relevance to user profile with diversity across recommended items,
+ * preventing a single author or genre from dominating all top positions.
+ */
+export function applyMMR(
+  candidates: ScoredBook[],
+  vocab: FeatureVocabulary,
+  options?: {
+    diversityLambda?: number;
+  },
+): ScoredBook[] {
+  if (candidates.length <= 1) return [...candidates];
+
+  const lambda = Math.max(0, Math.min(1, options?.diversityLambda ?? 0.75));
+
+  // Pre-vectorize and normalize candidates
+  const candidateVectors = new Map<string, number[]>();
+  for (const c of candidates) {
+    candidateVectors.set(c.id, vectorizeBook(c, vocab, true));
+  }
+
+  const remaining = [...candidates];
+  const selected: ScoredBook[] = [];
+  const maxSimToSelected = new Map<string, number>();
+  for (const c of remaining) {
+    maxSimToSelected.set(c.id, 0);
+  }
+
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const candidate = remaining[i];
+      const simUser = candidate.recommendationScore ?? 0;
+      const maxSimSelected = maxSimToSelected.get(candidate.id) ?? 0;
+      const mmrScore = lambda * simUser - (1 - lambda) * maxSimSelected;
+
+      if (mmrScore > bestScore + 1e-6) {
+        bestScore = mmrScore;
+        bestIdx = i;
+      } else if (Math.abs(mmrScore - bestScore) <= 1e-6) {
+        // Tie-breaker: higher user relevance first, then preserve initial candidate order
+        const currentBestSim = remaining[bestIdx].recommendationScore ?? 0;
+        if (simUser > currentBestSim + 1e-6) {
+          bestScore = mmrScore;
+          bestIdx = i;
+        }
+      }
+    }
+
+    const [chosen] = remaining.splice(bestIdx, 1);
+    selected.push(chosen);
+
+    const chosenVec = candidateVectors.get(chosen.id);
+    if (chosenVec) {
+      for (const rem of remaining) {
+        const remVec = candidateVectors.get(rem.id);
+        if (remVec) {
+          const sim = computeCosineSimilarity(remVec, chosenVec);
+          const currentMax = maxSimToSelected.get(rem.id) ?? 0;
+          if (sim > currentMax) {
+            maxSimToSelected.set(rem.id, sim);
+          }
+        }
+      }
+    }
+  }
+
+  return selected;
+}
+
+export interface NativeRecommendationDetails {
+  scores: Map<string, number>;
+  reasons: Map<string, string>;
+  vocab: IndexedVocabulary;
+  normalizedUserProfile: number[];
+  candidateVectors: Map<string, number[]>;
+}
+
+/**
+ * Computes recommendations and feature breakdown details for explanation and MMR reranking.
+ */
+export function computeNativeRecommendationsWithDetails(
   candidates: Book[],
   historyBooks: { book: Book; status: 'read' | 'reading' }[],
   options?: RecommendationOptions,
-): Map<string, number> {
-  const scoresMap = new Map<string, number>();
+): NativeRecommendationDetails {
+  const scores = new Map<string, number>();
+  const reasons = new Map<string, string>();
+  const candidateVectors = new Map<string, number[]>();
+  const emptyVocab: IndexedVocabulary = {
+    tags: [],
+    authorIds: [],
+    tagIndexMap: new Map(),
+    authorIndexMap: new Map(),
+    tagIdfMap: new Map(),
+  };
+
   const interactions = options?.interactions ?? [];
 
   if (!candidates.length || (!historyBooks.length && !interactions.length)) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab: emptyVocab,
+      normalizedUserProfile: [],
+      candidateVectors,
+    };
   }
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -190,12 +382,18 @@ export function computeNativeRecommendations(
   const featureDim = vocab.tags.length + vocab.authorIds.length;
 
   if (featureDim === 0) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab,
+      normalizedUserProfile: [],
+      candidateVectors,
+    };
   }
 
-  // Construct user profile vector as weighted sum of read, reading & interacted books
-  // Each history/interaction book is normalized to unit length before weighting and accumulation
   const userProfile = new Array<number>(featureDim).fill(0);
+  const historyWeightVector = new Array<number>(featureDim).fill(0);
+  const interactionWeightVector = new Array<number>(featureDim).fill(0);
   let hasValidSignal = false;
 
   for (const item of historyBooks) {
@@ -203,7 +401,9 @@ export function computeNativeRecommendations(
     const bookVec = vectorizeBook(item.book, vocab, true);
     for (let i = 0; i < featureDim; i++) {
       if (bookVec[i] > 0) {
-        userProfile[i] += bookVec[i] * weight;
+        const val = bookVec[i] * weight;
+        userProfile[i] += val;
+        historyWeightVector[i] += val;
         hasValidSignal = true;
       }
     }
@@ -217,7 +417,9 @@ export function computeNativeRecommendations(
       const bookVec = vectorizeBook(b, vocab, true);
       for (let i = 0; i < featureDim; i++) {
         if (bookVec[i] > 0) {
-          userProfile[i] += bookVec[i] * interactionWeight;
+          const val = bookVec[i] * interactionWeight;
+          userProfile[i] += val;
+          interactionWeightVector[i] += val;
           hasValidSignal = true;
         }
       }
@@ -225,18 +427,57 @@ export function computeNativeRecommendations(
   }
 
   if (!hasValidSignal) {
-    return scoresMap;
+    return {
+      scores,
+      reasons,
+      vocab,
+      normalizedUserProfile: [],
+      candidateVectors,
+    };
   }
 
   const normalizedUserProfile = normalizeVector(userProfile);
 
+  const reasonCtx: ReasonGenerationContext = {
+    vocab,
+    normalizedUserProfile,
+    historyWeightVector,
+    interactionWeightVector,
+    historyBooks,
+    interactions,
+  };
+
   for (const candidate of candidates) {
     const candidateVec = vectorizeBook(candidate, vocab);
+    candidateVectors.set(candidate.id, candidateVec);
     const score = computeCosineSimilarity(candidateVec, normalizedUserProfile);
-    scoresMap.set(candidate.id, score);
+    scores.set(candidate.id, score);
+
+    if (score >= opts.recommendationThreshold) {
+      const reason = generateRecommendationReason(candidate, candidateVec, reasonCtx);
+      reasons.set(candidate.id, reason);
+    }
   }
 
-  return scoresMap;
+  return {
+    scores,
+    reasons,
+    vocab,
+    normalizedUserProfile,
+    candidateVectors,
+  };
+}
+
+/**
+ * Computes cosine similarity between candidate books and user reading history using pure JavaScript float operations.
+ * Allocates zero tensors and runs synchronously with microsecond latency.
+ */
+export function computeNativeRecommendations(
+  candidates: Book[],
+  historyBooks: { book: Book; status: 'read' | 'reading' }[],
+  options?: RecommendationOptions,
+): Map<string, number> {
+  return computeNativeRecommendationsWithDetails(candidates, historyBooks, options).scores;
 }
 
 /**
@@ -304,24 +545,48 @@ export function rankCatalogBooksNative(
   let scoredCandidates: ScoredBook[] = [];
 
   if ((historyBooks.length > 0 || hasInteractions) && candidates.length > 0) {
-    const scores = computeNativeRecommendations(candidates, historyBooks, opts);
+    const details = computeNativeRecommendationsWithDetails(candidates, historyBooks, opts);
+    const { scores, reasons, vocab } = details;
 
     scoredCandidates = candidates.map((book) => {
       const score = scores.get(book.id) ?? 0;
       const status = readings.get(book.id);
+      const isRecommended = score >= opts.recommendationThreshold;
       return {
         ...book,
         readingStatus: status ?? undefined,
         recommendationScore: score,
-        isRecommended: score >= opts.recommendationThreshold,
+        isRecommended,
+        recommendationReason: isRecommended ? reasons.get(book.id) : undefined,
       };
     });
 
-    // Sort candidates: highest score first; preserve original order on ties
-    scoredCandidates.sort((a, b) => {
-      const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
-      return Math.abs(diff) > 0.0001 ? diff : 0;
-    });
+    const shouldApplyMMR =
+      options?.enableMMR === true ||
+      (options?.diversityLambda !== undefined && options?.enableMMR !== false);
+    const lambda = opts.diversityLambda;
+
+    if (shouldApplyMMR) {
+      const recommended = scoredCandidates.filter((b) => b.isRecommended);
+      const unrecommended = scoredCandidates.filter((b) => !b.isRecommended);
+
+      unrecommended.sort((a, b) => {
+        const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
+        return Math.abs(diff) > 0.0001 ? diff : 0;
+      });
+
+      const diversifiedRecommended = applyMMR(recommended, vocab, {
+        diversityLambda: lambda,
+      });
+
+      scoredCandidates = [...diversifiedRecommended, ...unrecommended];
+    } else {
+      // Sort candidates: highest score first; preserve original order on ties
+      scoredCandidates.sort((a, b) => {
+        const diff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0);
+        return Math.abs(diff) > 0.0001 ? diff : 0;
+      });
+    }
   } else {
     scoredCandidates = candidates.map((book) => ({
       ...book,

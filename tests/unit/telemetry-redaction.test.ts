@@ -3,6 +3,7 @@ import {
   sanitizePayload,
   redactSensitiveHeaders,
   sanitizeError,
+  isSensitiveKey,
 } from '../../src/lib/observability/redaction';
 
 describe('Telemetry Redaction & Sanitization Engine (LGPD)', () => {
@@ -331,6 +332,50 @@ describe('Telemetry Redaction & Sanitization Engine (LGPD)', () => {
       };
       const sanitized = sanitizePayload(buggyObj);
       expect(sanitized).toEqual({ unredacted: '[UNSANITIZED_DATA]' });
+    });
+
+    it('avalia termos sensíveis (token, password, secret) antes de autor e preserva apenas campos seguros de autor', () => {
+      // Safe author fields
+      expect(isSensitiveKey('author')).toBe(false);
+      expect(isSensitiveKey('author_id')).toBe(false);
+      expect(isSensitiveKey('author_name')).toBe(false);
+      expect(isSensitiveKey('book_author')).toBe(false);
+      expect(isSensitiveKey('authorId')).toBe(false);
+      expect(isSensitiveKey('authorName')).toBe(false);
+
+      // Sensitive terms inside author-named fields
+      expect(isSensitiveKey('author_token')).toBe(true);
+      expect(isSensitiveKey('author_password')).toBe(true);
+      expect(isSensitiveKey('author_secret')).toBe(true);
+      expect(isSensitiveKey('author_key')).toBe(true);
+      expect(isSensitiveKey('author_credential')).toBe(true);
+
+      const payload = {
+        author: 'Machado de Assis',
+        author_id: 'uuid-123',
+        author_token: 'secret-token-456',
+        author_password: 'author-pass-789',
+      };
+      const sanitized = sanitizePayload(payload);
+      expect(sanitized.author).toBe('Machado de Assis');
+      expect(sanitized.author_id).toBe('uuid-123');
+      expect(sanitized.author_token).toBe('[REDACTED]');
+      expect(sanitized.author_password).toBe('[REDACTED]');
+    });
+
+    it('converte BigInt para string durante serialização sem lançar exceção no JSON.stringify', () => {
+      const payload = {
+        id: BigInt('9007199254740993'),
+        total_views: BigInt('12345678901234567890'),
+      };
+
+      const sanitized = sanitizePayload(payload);
+      expect(sanitized.id).toBe('9007199254740993');
+      expect(sanitized.total_views).toBe('12345678901234567890');
+
+      // Verifica que JSON.stringify não lança "TypeError: Do not know how to serialize a BigInt"
+      expect(() => JSON.stringify(sanitized)).not.toThrow();
+      expect(JSON.stringify(sanitized)).toContain('"id":"9007199254740993"');
     });
   });
 });

@@ -276,7 +276,8 @@ test.describe('E2E Telemetria & Conformidade de Privacidade (Task 10)', () => {
 
     // 5. Navega para outra rota
     await page.goto('/livros');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('.analytics-consent')).toBeVisible();
+    await expect(page.locator('.cookie-banner, .analytics-consent')).toBeVisible();
     await page.waitForTimeout(500);
 
     // 6. Confirma cessação imediata de transmissões analíticas

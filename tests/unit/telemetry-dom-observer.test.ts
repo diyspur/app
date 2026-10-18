@@ -177,6 +177,26 @@ describe('DOM Click Observer Telemetry (Task 5)', () => {
     cleanup();
   });
 
+  it('avalia aria-label quando textContent contém apenas espaços em branco', () => {
+    const cleanup = setupDomClickObserver();
+
+    const button = new MockElement('button');
+    button.id = 'btn-close';
+    button.textContent = '   \n  \t  ';
+    button.setAttribute('aria-label', 'Fechar modal');
+
+    triggerClick(button);
+
+    expect(trackProductEvent).toHaveBeenCalledTimes(1);
+    expect(trackProductEvent).toHaveBeenCalledWith('cta_clicked', expect.objectContaining({
+      cta_id: 'btn-close',
+      text_content: 'Fechar modal',
+      element_tag: 'BUTTON',
+    }));
+
+    cleanup();
+  });
+
   it('captura clique em link <a> e sanitiza href removendo query strings com tokens ou segredos', () => {
     const cleanup = setupDomClickObserver();
 

@@ -125,4 +125,9 @@ export function resetProductIdentity(): void {
       faro.api.resetUser();
     }
   } catch {}
+
+  // 3. Google Analytics 4
+  try {
+    window.gtag?.('set', 'user_properties', { user_id: null });
+  } catch {}
 }

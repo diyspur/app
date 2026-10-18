@@ -9,6 +9,7 @@ import {
   recordServerAction,
   initMetricsRegistry,
   resetMetricsForTesting,
+  normalizeRoute,
 } from '../../src/lib/observability/metrics';
 import { GET as getMetricsRoute } from '../../src/app/api/metrics/route';
 import { GET as getHealthRoute } from '../../src/app/api/health/route';
@@ -95,6 +96,15 @@ describe('OpenTelemetry and Prometheus Server-Side (Task 7)', () => {
       recordServerAction('clubs.join', 'success');
       const output = await registry.metrics();
       expect(output).toContain('diyspur_server_actions_total{action="clubs.join",status="success"} 1');
+    });
+
+    it('normalizeRoute normalizes dynamic slugs for livros, clubes, listas e temporadas', () => {
+      expect(normalizeRoute('/livros/dom-casmurro')).toBe('/livros/:slug');
+      expect(normalizeRoute('/clubes/leitura-sci-fi')).toBe('/clubes/:slug');
+      expect(normalizeRoute('/listas/favoritos-2026')).toBe('/listas/:slug');
+      expect(normalizeRoute('/temporadas/verao-2026')).toBe('/temporadas/:slug');
+      expect(normalizeRoute('/livros/c19d4b4d-5829-4d69-a1d2-06927f8e3f81')).toBe('/livros/:slug');
+      expect(normalizeRoute('/usuarios/12345')).toBe('/usuarios/:id');
     });
   });
 

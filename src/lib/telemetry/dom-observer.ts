@@ -88,6 +88,23 @@ export function extractInteractiveElement(target: EventTarget | null): HTMLEleme
 }
 
 /**
+ * Extrai texto representativo do elemento para telemetria.
+ * Avalia aria-label caso o textContent seja vazio ou contenha apenas espaços em branco.
+ */
+export function extractElementText(element: HTMLElement): string {
+  const custom = element.getAttribute('data-telemetry-text');
+  if (custom && custom.trim()) {
+    return custom.trim();
+  }
+
+  const textContent = (element.textContent || '').trim();
+  const ariaLabel = (element.getAttribute('aria-label') || '').trim();
+  const value = (element.getAttribute('value') || '').trim();
+
+  return textContent || ariaLabel || value || '';
+}
+
+/**
  * Configura o observador global declarativo de cliques no DOM.
  * Rastreia botões, links semânticos e elementos anotados com data-telemetry-event
  * sem necessidade de instrumentar individualmente cada componente.
@@ -133,12 +150,7 @@ export function setupDomClickObserver(): () => void {
       const ctaId = rawCtaId ? redactPiiText(rawCtaId).trim().slice(0, 100) : '';
 
       // 4. Extração, redação de PII e truncamento do text_content (máx 100 caracteres)
-      const rawText =
-        element.getAttribute('data-telemetry-text') ||
-        element.textContent ||
-        element.getAttribute('aria-label') ||
-        element.getAttribute('value') ||
-        '';
+      const rawText = extractElementText(element);
       const normalizedText = rawText.replace(/\s+/g, ' ').trim();
       const textContent = normalizedText ? redactPiiText(normalizedText).slice(0, 100) : '';
 

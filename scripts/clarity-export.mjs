@@ -14,6 +14,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Helper to load simple .env / .env.local file if present and token not already in env
 function loadEnvFile(filePath) {
@@ -45,6 +46,11 @@ function loadEnvFile(filePath) {
 // Attempt to load .env.local or .env from current directory or app root
 loadEnvFile(resolve(process.cwd(), '.env.local'));
 loadEnvFile(resolve(process.cwd(), '.env'));
+try {
+  loadEnvFile(fileURLToPath(new URL('../.env.local', import.meta.url)));
+} catch {
+  loadEnvFile(new URL('../.env.local', import.meta.url).pathname);
+}
 
 function parseArgs(args) {
   const options = {

@@ -114,7 +114,7 @@ describe('TelemetryProvider Route Tracking & Mapping (Task 5)', () => {
       });
     });
 
-    it('mapeia visão geral de clube (/clubes/[slug])', () => {
+    it('mapeia visão geral de clube (/clubes/[slug]) e listagem (/clubes)', () => {
       const match = resolveRouteEvent('/clubes/classicos');
       expect(match).toEqual({
         event: 'club_page_viewed',
@@ -122,6 +122,15 @@ describe('TelemetryProvider Route Tracking & Mapping (Task 5)', () => {
           page_path: '/clubes/classicos',
           page_type: 'club',
           club_slug: 'classicos',
+        },
+      });
+
+      const listMatch = resolveRouteEvent('/clubes');
+      expect(listMatch).toEqual({
+        event: 'club_page_viewed',
+        properties: {
+          page_path: '/clubes',
+          page_type: 'community',
         },
       });
     });
@@ -142,7 +151,7 @@ describe('TelemetryProvider Route Tracking & Mapping (Task 5)', () => {
       });
     });
 
-    it('mapeia fila de próximas leituras (/proximos e /fila)', () => {
+    it('mapeia fila de próximas leituras (/proximos, /fila e /minha-fila)', () => {
       expect(resolveRouteEvent('/proximos')).toEqual({
         event: 'up_next_page_viewed',
         properties: { page_path: '/proximos', page_type: 'queue' },
@@ -150,6 +159,10 @@ describe('TelemetryProvider Route Tracking & Mapping (Task 5)', () => {
       expect(resolveRouteEvent('/fila')).toEqual({
         event: 'up_next_page_viewed',
         properties: { page_path: '/fila', page_type: 'queue' },
+      });
+      expect(resolveRouteEvent('/minha-fila')).toEqual({
+        event: 'up_next_page_viewed',
+        properties: { page_path: '/minha-fila', page_type: 'queue' },
       });
     });
 

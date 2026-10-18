@@ -2,6 +2,7 @@ import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 import client from 'prom-client';
 import { logInfo, logError } from './logger';
 import { sanitizePayload, redactPiiText } from './redaction';
+import { recordServerAction } from '@/lib/observability/metrics';
 
 export interface TelemetryActionOptions<TArgs extends unknown[], TResult> {
   resourceExtractor?: (...args: TArgs) => Record<string, unknown>;
@@ -78,6 +79,8 @@ function recordMetric(
       const errKey = `${action}:${status}`;
       testErrorsMap[errKey] = (testErrorsMap[errKey] || 0) + 1;
     }
+
+    recordServerAction(action, status);
 
     if (actionExecutionsCounter) {
       actionExecutionsCounter.inc({ action, status });

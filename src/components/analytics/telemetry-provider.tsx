@@ -34,10 +34,10 @@ export function resolvePageType(pathname: string): string {
   if (!pathname || pathname === '/') return 'landing';
   if (pathname === '/livros') return 'catalog';
   if (pathname.startsWith('/livros/')) return 'book_detail';
-  if (pathname.startsWith('/clubes/')) return 'community';
+  if (pathname === '/clubes' || pathname.startsWith('/clubes')) return 'community';
   if (pathname === '/metas') return 'goals';
   if (pathname.startsWith('/diario')) return 'journal';
-  if (pathname === '/proximos' || pathname === '/fila') return 'queue';
+  if (pathname === '/proximos' || pathname === '/fila' || pathname === '/minha-fila') return 'queue';
   if (pathname.startsWith('/perfil')) return 'profile';
   if (pathname.startsWith('/ranking')) return 'ranking';
   if (pathname.startsWith('/desafios')) return 'challenges';
@@ -101,6 +101,16 @@ export function resolveRouteEvent(pathname: string): ResolvedRouteEvent | null {
     };
   }
 
+  if (pathname === '/clubes') {
+    return {
+      event: 'club_page_viewed',
+      properties: {
+        page_path: pathname,
+        page_type: 'community',
+      },
+    };
+  }
+
   const clubMatch = pathname.match(/^\/clubes\/([^/]+)/);
   if (clubMatch && clubMatch[1]) {
     return {
@@ -127,7 +137,7 @@ export function resolveRouteEvent(pathname: string): ResolvedRouteEvent | null {
     };
   }
 
-  if (pathname === '/proximos' || pathname === '/fila') {
+  if (pathname === '/proximos' || pathname === '/fila' || pathname === '/minha-fila') {
     return {
       event: 'up_next_page_viewed',
       properties: { page_path: pathname, page_type: 'queue' },

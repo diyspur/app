@@ -29,6 +29,13 @@ export function normalizeRoute(rawRoute?: string | null): string {
   if (!route.startsWith('/')) {
     route = `/${route}`;
   }
+
+  // Normaliza slugs dinâmicos de domínio para limitar cardinalidade Prometheus
+  route = route.replace(/\/livros\/[^/]+/g, '/livros/:slug');
+  route = route.replace(/\/clubes\/[^/]+/g, '/clubes/:slug');
+  route = route.replace(/\/listas\/[^/]+/g, '/listas/:slug');
+  route = route.replace(/\/temporadas\/[^/]+/g, '/temporadas/:slug');
+
   // Substitui UUIDs por :id
   route = route.replace(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,

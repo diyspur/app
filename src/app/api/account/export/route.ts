@@ -23,6 +23,7 @@ export async function GET() {
       channelConsentsRes,
       channelPrefsRes,
       notifPrefsRes,
+      goalsRes,
     ] = await Promise.all([
       client
         .from('profiles')
@@ -62,14 +63,14 @@ export async function GET() {
         .limit(200),
       client
         .from('club_messages')
-        .select('id,channel_id,content,has_spoilers,created_at,updated_at')
-        .eq('user_id', userId)
+        .select('id,channel_id,content,reply_to_id,video_sec,created_at,edited_at')
+        .eq('author_id', userId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(500),
       client
         .from('club_channel_consents')
-        .select('channel_id,rules_version,consented_at')
+        .select('channel_id,rules_version,accepted_at')
         .eq('user_id', userId)
         .limit(100),
       client
@@ -79,17 +80,40 @@ export async function GET() {
         .limit(100),
       client
         .from('user_notification_preferences')
-        .select('in_app,email_daily_digest,email_instant_mentions,quiet_hours_enabled,quiet_hours_start,quiet_hours_end,timezone,updated_at')
+        .select('replies,mentions,meeting_reminders,channel_activity,updated_at')
         .eq('user_id', userId)
         .maybeSingle(),
+      client
+        .from('reading_goals')
+        .select('id,title,year,target_books,target_pages,target_minutes,version,created_at,archived_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100),
     ]);
+
+    const failedSections: string[] = [];
+    if (profileRes.error) failedSections.push('profile');
+    if (journalRes.error) failedSections.push('journalEntries');
+    if (listsRes.error) failedSections.push('readingLists');
+    if (progressRes.error) failedSections.push('readingProgress');
+    if (rsvpsRes.error) failedSections.push('meetingRsvps');
+    if (clubsRes.error) failedSections.push('clubMemberships');
+    if (bookReadingsRes.error) failedSections.push('bookReadings');
+    if (clubMessagesRes.error) failedSections.push('communityMessages');
+    if (channelConsentsRes.error) failedSections.push('channelConsents');
+    if (channelPrefsRes.error) failedSections.push('channelPreferences');
+    if (notifPrefsRes.error) failedSections.push('notificationPreferences');
+    if (goalsRes.error) failedSections.push('readingGoals');
 
     const payload = {
       exportedAt: new Date().toISOString(),
+      status: failedSections.length === 0 ? 'complete' : 'partial',
+      failedSections: failedSections.length > 0 ? failedSections : undefined,
       account: {
         id: userId,
         profile: profileRes.data ?? null,
       },
+      readingGoals: goalsRes.data ?? [],
       journalEntries: journalRes.data ?? [],
       readingLists: listsRes.data ?? [],
       readingProgress: progressRes.data ?? [],

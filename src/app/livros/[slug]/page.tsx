@@ -5,10 +5,13 @@ import { notFound } from 'next/navigation';
 import { getBook } from '@/features/catalog/queries';
 import { BookCover } from '@/components/books/book-cover';
 import { ShareBookButton } from '@/components/books/share-book-button';
+import { AddQueueButton } from '@/components/up-next/add-queue-button';
 import { BookReadingControl } from '@/components/books/book-reading-control';
 import { BookReadingStats } from '@/components/books/book-reading-stats';
 import { DiscussionEntryButton } from '@/components/discussions/discussion-entry-button';
 import { getBookReadingStats, getMyBookReadingState } from '@/features/reading/queries';
+import { isBookInUserUpNext } from '@/features/up-next/queries';
+import { requireSession } from '@/lib/auth/session';
 import { JsonLd } from '@/components/json-ld';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -39,9 +42,11 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
   const book = await getBook(slug);
   if (!book) notFound();
 
-  const [readingState, readingStats] = await Promise.all([
+  const session = await requireSession();
+  const [readingState, readingStats, inUpNext] = await Promise.all([
     getMyBookReadingState(book.id),
     getBookReadingStats(book.id),
+    session ? isBookInUserUpNext(session.userId, book.id) : Promise.resolve(false),
   ]);
 
   const safeExternal = book.amazon_url && /^https:\/\//i.test(book.amazon_url);
@@ -164,6 +169,7 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
                   </a>
                 ) : null}
                 <ShareBookButton bookTitle={book.title} bookSlug={book.slug} />
+                <AddQueueButton bookId={book.id} initialInQueue={inUpNext} signedIn={Boolean(session)} />
                 <Link
                   className="btn btn-secondary btn-sm"
                   href={`/leituras-compartilhadas?livro=${encodeURIComponent(book.id)}`}

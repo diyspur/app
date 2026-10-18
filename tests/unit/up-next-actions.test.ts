@@ -6,7 +6,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
-describe('up-next actions', () => {
+describe('up-next actions (QA-06 continuous playlist)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -24,24 +24,9 @@ describe('up-next actions', () => {
     expect(res.message).toBe('Entre para adicionar livros à sua fila.');
   });
 
-  it('handles queue_full error properly', async () => {
+  it('returns success message on valid add (even beyond 5 items)', async () => {
     const rpcMock = vi.fn().mockResolvedValue({
-      data: null,
-      error: { message: 'queue_full', code: 'P0001' },
-    });
-    vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
-      userId: 'user-1',
-      client: { rpc: rpcMock } as any,
-    } as any);
-
-    const res = await addToUpNext('550e8400-e29b-41d4-a716-446655440000');
-    expect(res.ok).toBe(false);
-    expect(res.message).toContain('Sua fila já tem cinco livros');
-  });
-
-  it('returns success message on valid add', async () => {
-    const rpcMock = vi.fn().mockResolvedValue({
-      data: 1,
+      data: 6, // 6th item in the continuous playlist
       error: null,
     });
     vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
@@ -61,5 +46,21 @@ describe('up-next actions', () => {
     const res = await removeFromUpNext('invalid');
     expect(res.ok).toBe(false);
     expect(res.message).toBe('Livro inválido.');
+  });
+
+  it('successfully removes from queue', async () => {
+    const deleteMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+    vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
+      userId: 'user-1',
+      client: { from: vi.fn().mockReturnValue({ delete: deleteMock }) } as any,
+    } as any);
+
+    const res = await removeFromUpNext('550e8400-e29b-41d4-a716-446655440000');
+    expect(res.ok).toBe(true);
+    expect(res.message).toBe('Livro removido da sua fila.');
   });
 });

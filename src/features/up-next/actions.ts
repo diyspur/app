@@ -19,9 +19,6 @@ export async function addToUpNext(bookId: string) {
     p_book: parsed.data,
   });
 
-  if (error?.message?.includes('queue_full')) {
-    return { ok: false, message: 'Sua fila já tem cinco livros. Remova um para continuar.' };
-  }
   if (error) return { ok: false, ...mapDatabaseError(error.code) };
   revalidatePath('/minha-fila');
   return { ok: true, message: 'Livro guardado na sua fila.' };

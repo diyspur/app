@@ -35,3 +35,15 @@ export async function getUserUpNext(userId: string): Promise<UpNextItem[]> {
     book: Array.isArray(item.book) ? (item.book[0] ?? null) : (item.book ?? null),
   }));
 }
+
+export async function isBookInUserUpNext(userId: string, bookId: string): Promise<boolean> {
+  const client = await createServerSupabase();
+  const { data, error } = await client
+    .from('user_up_next')
+    .select('book_id')
+    .eq('user_id', userId)
+    .eq('book_id', bookId)
+    .maybeSingle();
+
+  return !error && Boolean(data);
+}

@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import type { ClubSummary } from '@/features/clubs/queries';
 import { getVisibleClubsAction } from '@/features/clubs/actions';
 
@@ -17,9 +17,7 @@ export function ClubSearch({
   initialCursor,
   initialQuery = '',
 }: ClubSearchProps) {
-  const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const [query, setQuery] = useState(initialQuery);
   const [activeQuery, setActiveQuery] = useState(initialQuery);
@@ -28,19 +26,49 @@ export function ClubSearch({
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
   const loadedIdsRef = useRef(new Set(initialClubs.map((c) => c.id)));
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastCommittedQueryRef = useRef(initialQuery);
 
-  // Sync state if server re-renders with new props
+  // Abort any in-flight request when component unmounts
   useEffect(() => {
-    setQuery(initialQuery);
-    setActiveQuery(initialQuery);
-    setClubs(initialClubs);
-    setCursor(initialCursor);
-    loadedIdsRef.current = new Set(initialClubs.map((c) => c.id));
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Sync state if server props change from external navigation, avoiding clobbering active keystrokes
+  useEffect(() => {
+    if (initialQuery !== lastCommittedQueryRef.current) {
+      lastCommittedQueryRef.current = initialQuery;
+      setQuery(initialQuery);
+      setActiveQuery(initialQuery);
+      setClubs(initialClubs);
+      setCursor(initialCursor);
+      loadedIdsRef.current = new Set(initialClubs.map((c) => c.id));
+    }
   }, [initialClubs, initialCursor, initialQuery]);
+
+  const updateUrl = useCallback(
+    (searchTerm: string) => {
+      if (typeof window === 'undefined') return;
+      try {
+        const url = new URL(window.location.href);
+        if (searchTerm) {
+          url.searchParams.set('q', searchTerm);
+        } else {
+          url.searchParams.delete('q');
+        }
+        window.history.replaceState(null, '', `${pathname}${url.search}`);
+      } catch {
+        // Safe fallback in environments without full window.location
+      }
+    },
+    [pathname],
+  );
 
   const fetchClubs = useCallback(
     async (searchTerm: string, cursorVal?: string | null) => {
@@ -104,6 +132,7 @@ export function ClubSearch({
           setClubs(incoming);
           setCursor(next);
           setActiveQuery(searchTerm.trim());
+          lastCommittedQueryRef.current = searchTerm.trim();
         }
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
@@ -120,50 +149,45 @@ export function ClubSearch({
     [],
   );
 
-  // Debounced search on typing
+  // Handle browser back/forward navigation (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    function handlePopState() {
+      const url = new URL(window.location.href);
+      const q = url.searchParams.get('q') || '';
+      lastCommittedQueryRef.current = q;
+      setQuery(q);
+      void fetchClubs(q);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [fetchClubs]);
+
+  // Debounced search on typing without redundant duplicate fetch
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed === activeQuery.trim()) return;
 
     const timer = window.setTimeout(() => {
-      const nextParams = new URLSearchParams(searchParams ? searchParams.toString() : '');
-      if (trimmed) {
-        nextParams.set('q', trimmed);
-      } else {
-        nextParams.delete('q');
-      }
-      const suffix = nextParams.toString();
-      startTransition(() => {
-        router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
-      });
+      updateUrl(trimmed);
       void fetchClubs(trimmed);
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [query, activeQuery, fetchClubs, pathname, router, searchParams]);
+  }, [query, activeQuery, fetchClubs, updateUrl]);
 
   function handleSearchSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = query.trim();
-    const nextParams = new URLSearchParams(searchParams ? searchParams.toString() : '');
-    if (trimmed) {
-      nextParams.set('q', trimmed);
-    } else {
-      nextParams.delete('q');
-    }
-    const suffix = nextParams.toString();
-    router.push(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
+    updateUrl(trimmed);
     void fetchClubs(trimmed);
   }
 
   function handleClear() {
     setQuery('');
-    const nextParams = new URLSearchParams(searchParams ? searchParams.toString() : '');
-    nextParams.delete('q');
-    const suffix = nextParams.toString();
-    startTransition(() => {
-      router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
-    });
+    updateUrl('');
     void fetchClubs('');
   }
 
@@ -210,7 +234,7 @@ export function ClubSearch({
           Buscar
         </button>
         <span className="sr-only" id="club-search-status" role="status" aria-live="polite">
-          {isSearching || isPending ? 'Buscando clubes…' : ''}
+          {isSearching ? 'Buscando clubes…' : ''}
         </span>
       </form>
 

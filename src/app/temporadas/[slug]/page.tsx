@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSeason } from '@/features/catalog/queries';
+import { QueryState } from '@/components/query-state';
+import { type QueryResult, querySuccess, queryFailure } from '@/lib/queries/result';
 
 export async function generateMetadata({
   params,
@@ -54,8 +56,9 @@ export default async function SeasonPage({
         chapter_title: chapter.title,
         reading_range: chapter.reading_range,
         published_at: chapter.published_at,
-        can_open: true,
+        can_open: false,
         requires_quiz: false,
+        reason: 'access_check_unavailable',
       }));
 
   // Deduplicate chapters by ID and by chapter number
@@ -69,6 +72,11 @@ export default async function SeasonPage({
     seenChapterNumbers.add(row.chapter_number);
     return true;
   });
+
+  const hasAccessFailure = rawRows.some((r) => r.reason === 'access_check_unavailable');
+  const chaptersResult: QueryResult<typeof rows> = hasAccessFailure
+    ? queryFailure('unavailable', 'Instabilidade momentânea ao verificar permissões de acesso aos capítulos da temporada.')
+    : querySuccess(rows);
 
   // Deduplicate milestones by ID
   const seenMilestoneIds = new Set<string>();
@@ -158,55 +166,60 @@ export default async function SeasonPage({
           )}
         </div>
 
-        {rows.length ? (
-          rows.map((row, index) => {
-            const chapter = chapterById.get(row.chapter_id);
-            const title = formatChapterTitle(row.chapter_title, row.chapter_number);
-            const range = formatReadingRange(row.reading_range, row.chapter_number);
-            const formattedDate = row.published_at
-              ? new Intl.DateTimeFormat('pt-BR', {
-                  dateStyle: 'medium',
-                  timeZone: 'America/Sao_Paulo',
-                }).format(new Date(row.published_at))
-              : null;
-            const subtitle = [range, formattedDate].filter(Boolean).join(' · ');
+        <QueryState
+          result={chaptersResult}
+          emptyFallback={
+            <div className="empty-state">
+              <h2>Os capítulos serão publicados em breve</h2>
+              <p>A temporada está sendo preparada pela equipe editorial.</p>
+            </div>
+          }
+        >
+          {(chapterRows) =>
+            chapterRows.map((row, index) => {
+              const chapter = chapterById.get(row.chapter_id);
+              const title = formatChapterTitle(row.chapter_title, row.chapter_number);
+              const range = formatReadingRange(row.reading_range, row.chapter_number);
+              const formattedDate = row.published_at
+                ? new Intl.DateTimeFormat('pt-BR', {
+                    dateStyle: 'medium',
+                    timeZone: 'America/Sao_Paulo',
+                  }).format(new Date(row.published_at))
+                : null;
+              const subtitle = [range, formattedDate].filter(Boolean).join(' · ');
 
-            return row.can_open && chapter ? (
-              <Link
-                className="timeline-row"
-                href={`/capitulos/${chapter.id}`}
-                key={row.chapter_id}
-              >
-                <div>
-                  <span className="eyebrow">Capítulo {row.chapter_number}</span>
-                  <h3>{title}</h3>
-                  {subtitle ? <p>{subtitle}</p> : null}
+              return row.can_open && chapter ? (
+                <Link
+                  className="timeline-row"
+                  href={`/capitulos/${chapter.id}`}
+                  key={row.chapter_id}
+                >
+                  <div>
+                    <span className="eyebrow">Capítulo {row.chapter_number}</span>
+                    <h3>{title}</h3>
+                    {subtitle ? <p>{subtitle}</p> : null}
+                  </div>
+                  <span className={`status-pill ${index === 0 ? '' : 'neutral'}`}>
+                    {index === 0 ? 'Começar leitura' : 'Abrir capítulo'}
+                  </span>
+                </Link>
+              ) : (
+                <div
+                  className="timeline-row"
+                  key={row.chapter_id}
+                  aria-label={`Capítulo ${row.chapter_number} bloqueado`}
+                >
+                  <div>
+                    <span className="eyebrow">Capítulo {row.chapter_number}</span>
+                    <h3>{title}</h3>
+                    <p>Faça a tentativa do quiz anterior para continuar sem spoilers.</p>
+                  </div>
+                  <span className="status-pill neutral">Bloqueado</span>
                 </div>
-                <span className={`status-pill ${index === 0 ? '' : 'neutral'}`}>
-                  {index === 0 ? 'Começar leitura' : 'Abrir capítulo'}
-                </span>
-              </Link>
-            ) : (
-              <div
-                className="timeline-row"
-                key={row.chapter_id}
-                aria-label={`Capítulo ${row.chapter_number} bloqueado`}
-              >
-                <div>
-                  <span className="eyebrow">Capítulo {row.chapter_number}</span>
-                  <h3>{title}</h3>
-                  <p>Faça a tentativa do quiz anterior para continuar sem spoilers.</p>
-                </div>
-                <span className="status-pill neutral">Bloqueado</span>
-              </div>
-            );
-          })
-        ) : (
-          <div className="empty-state">
-            <h2>Os capítulos serão publicados em breve</h2>
-            <p>A temporada está sendo preparada pela equipe editorial.</p>
-          </div>
-        )}
+              );
+            })
+          }
+        </QueryState>
       </section>
     </div>
   );

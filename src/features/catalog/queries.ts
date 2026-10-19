@@ -27,7 +27,7 @@ export type Book = {
 };
 export type Season = { id: string; number: number; title: string; slug: string; book_id: string; status: string; description: string | null; starts_at: string | null; ends_at: string | null; cover_url: string | null };
 export type Chapter = { id: string; season_id: string; number: number; title: string; reading_range: string | null; youtube_url: string | null; summary: string | null; published_at: string | null };
-export type ChapterAccess = { chapter_id: string; chapter_number: number; chapter_title: string; reading_range: string | null; published_at: string | null; can_open: boolean; requires_quiz: boolean };
+export type ChapterAccess = { chapter_id: string; chapter_number: number; chapter_title: string; reading_range: string | null; published_at: string | null; can_open: boolean; requires_quiz: boolean; reason?: string };
 type ChapterNavigation = { id: string; number: number; title: string; published_at: string | null; canOpen: boolean };
 export type SeasonMilestone = { id: string; title: string; description: string | null; chapter_from: number | null; chapter_to: number | null; target_date: string | null; completed: boolean };
 export type Meeting = {
@@ -314,7 +314,20 @@ export const getSeason = cache(async (slug: string) => {
   ]);
   const completed = new Map((progressResult.data ?? []).map((row: { milestone_id: string; completed: boolean }) => [row.milestone_id, row.completed]));
   const milestones = ((milestoneResult.data ?? []) as Omit<SeasonMilestone, 'completed'>[]).map((milestone) => ({ ...milestone, completed: completed.get(milestone.id) === true }));
-  return { season: season as Season, book: book.data, chapters: (chapterResult.data ?? []) as Chapter[], chapterAccess: (accessResult.data ?? []) as ChapterAccess[], milestones };
+  const chapters = (chapterResult.data ?? []) as Chapter[];
+  const chapterAccess: ChapterAccess[] = (accessResult.error || !accessResult.data)
+    ? chapters.map((chapter) => ({
+        chapter_id: chapter.id,
+        chapter_number: chapter.number,
+        chapter_title: chapter.title,
+        reading_range: chapter.reading_range,
+        published_at: chapter.published_at,
+        can_open: false,
+        requires_quiz: false,
+        reason: 'access_check_unavailable',
+      }))
+    : (accessResult.data as ChapterAccess[]);
+  return { season: season as Season, book: book.data, chapters, chapterAccess, milestones };
 });
 
 export type ActiveSeasonInfo = {
@@ -450,7 +463,7 @@ export const getChapters = cache(async (id: string) => {
   const book = season.data ? await client.from('books').select('id,title,slug,cover_url,author_id').eq('id', season.data.book_id).maybeSingle() : { data: null };
   const ordered = (chapterList.data ?? []).filter((item) => !item.published_at || Date.parse(item.published_at) <= Date.now());
   const accessRows = (accessResult.data ?? []) as ChapterAccess[];
-  const navigationRows = accessRows.length ? accessRows.slice().sort((a, b) => a.chapter_number - b.chapter_number) : ordered.map((item) => ({ chapter_id: item.id, chapter_number: item.number, chapter_title: item.title, reading_range: null, published_at: item.published_at, can_open: true, requires_quiz: false }));
+  const navigationRows = accessRows.length ? accessRows.slice().sort((a, b) => a.chapter_number - b.chapter_number) : ordered.map((item) => ({ chapter_id: item.id, chapter_number: item.number, chapter_title: item.title, reading_range: null, published_at: item.published_at, can_open: false, requires_quiz: false, reason: 'access_check_unavailable' }));
   const navIndex = navigationRows.findIndex((item) => item.chapter_id === chapter.id);
   const previousAccessible = ordered.findIndex((item) => item.id === chapter.id);
   const previousRow = navIndex > 0 ? navigationRows[navIndex - 1] : null;

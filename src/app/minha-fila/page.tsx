@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/session';
-import { getUserUpNext } from '@/features/up-next/queries';
+import { getUserUpNextResult } from '@/features/up-next/queries';
 import { QueueManagement } from '@/components/up-next/queue-management';
+import { QueryState } from '@/components/query-state';
 
 export const metadata: Metadata = {
   title: 'Minha fila de leitura',
@@ -14,7 +15,7 @@ export default async function UpNextPage() {
   const session = await requireSession();
   if (!session) redirect('/entrar?redirect=/minha-fila');
 
-  const items = await getUserUpNext(session.userId);
+  const result = await getUserUpNextResult(session.userId);
 
   return (
     <section className="container">
@@ -30,7 +31,7 @@ export default async function UpNextPage() {
         <div className="section-head">
           <div>
             <span className="eyebrow">Prioridade</span>
-            <h2>Livros na sua fila ({items.length})</h2>
+            <h2>Livros na sua fila {result.ok ? `(${result.data.length})` : ''}</h2>
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <Link className="text-link" href="/listas">
@@ -42,7 +43,9 @@ export default async function UpNextPage() {
           </div>
         </div>
 
-        <QueueManagement initialItems={items} />
+        <QueryState result={result}>
+          {(items) => <QueueManagement initialItems={items} />}
+        </QueryState>
       </section>
     </section>
   );

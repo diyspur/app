@@ -31,7 +31,12 @@ export function CyberButton({
     <button
       className={`button ${variantClass} ${sizeClass} ${className}`.trim()}
       disabled={disabled || isLoading}
-      style={{ minHeight: '48px', minWidth: '48px', ...style }}
+      style={{
+        minBlockSize: 'var(--control-hit-size)',
+        minHeight: '48px',
+        minWidth: '48px',
+        ...style,
+      }}
       {...props}
     >
       {isLoading ? (

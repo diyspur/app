@@ -73,6 +73,12 @@ button, input, textarea, select {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+select {
+  min-block-size: var(--control-hit-size);
+}
+
 button {
   cursor: pointer;
   background: none;
@@ -169,6 +175,7 @@ img, svg {
   text-decoration: none;
   transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), transform var(--duration-fast), box-shadow var(--duration-fast);
   min-height: 48px;
+  min-block-size: var(--control-hit-size);
   padding: 0 22px;
   font-size: var(--text-body-sm);
 }
@@ -179,13 +186,15 @@ img, svg {
 
 .btn-lg {
   min-height: 48px;
+  min-block-size: var(--control-hit-size);
   padding: 0 24px;
   font-size: var(--text-body);
 }
 
 .btn-sm,
 .button-small {
-  min-height: 40px;
+  min-height: 48px;
+  min-block-size: var(--control-hit-size);
   padding: 0 16px;
   font-size: var(--text-body-sm);
   touch-action: manipulation;
@@ -194,7 +203,8 @@ img, svg {
 @media (max-width: 640px) {
   .btn-sm,
   .button-small {
-    min-height: 44px;
+    min-height: 48px;
+    min-block-size: var(--control-hit-size);
     padding: 0 18px;
   }
 }
@@ -1405,6 +1415,7 @@ img, svg {
 .field {
   width: 100%;
   min-height: 48px;
+  min-block-size: var(--control-hit-size);
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -3933,7 +3944,8 @@ img, svg {
 }
 
 .privacy-consent-actions .btn {
-  min-height: 40px;
+  min-height: 48px;
+  min-block-size: var(--control-hit-size);
 }
 
 

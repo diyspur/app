@@ -23,12 +23,26 @@ type SelectFieldProps = BaseFieldProps & {
 export type FieldProps = InputFieldProps | TextareaFieldProps | SelectFieldProps;
 
 export function Field(props: FieldProps) {
-  const { id, label, hint, error, as = 'input', className = '', children, ...rest } = props;
+  const {
+    id,
+    label,
+    hint,
+    error,
+    as = 'input',
+    className = '',
+    children,
+    'aria-describedby': externalDescribedBy,
+    'aria-invalid': externalInvalid,
+    ...rest
+  } = props;
 
-  const describedBy = [hint && `${id}-hint`, error && `${id}-error`]
-    .filter(Boolean)
-    .join(' ') || undefined;
+  const describedBy = [
+    ...(externalDescribedBy?.split(/\s+/).filter(Boolean) ?? []),
+    ...(hint ? [`${id}-hint`] : []),
+    ...(error ? [`${id}-error`] : []),
+  ].join(' ') || undefined;
 
+  const invalid = error ? true : externalInvalid;
   const fieldClass = `field ${className}`.trim();
 
   return (
@@ -41,17 +55,17 @@ export function Field(props: FieldProps) {
         <textarea
           id={id}
           className={fieldClass}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
           {...(rest as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
         />
       ) : as === 'select' ? (
         <select
           id={id}
           className={fieldClass}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
           {...(rest as React.SelectHTMLAttributes<HTMLSelectElement>)}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
         >
           {children}
         </select>
@@ -59,13 +73,13 @@ export function Field(props: FieldProps) {
         <input
           id={id}
           className={fieldClass}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
           {...(rest as React.InputHTMLAttributes<HTMLInputElement>)}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
         />
       )}
 
-      {hint && !error && (
+      {hint && (
         <span id={`${id}-hint`} className="field-hint">
           {hint}
         </span>

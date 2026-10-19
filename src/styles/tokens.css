@@ -1,5 +1,8 @@
 /* DIYSPUR Design Tokens — Nimble Design System (Light & Dark) */
 :root {
+  --control-hit-size: 3rem;
+  --weight-bold: 700;
+
   /* Type primitives — Nimble typography system */
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -29,6 +32,7 @@
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
+  --weight-bold: 700;
   --weight-display: 700;
 
   /* Legacy type scale aliases for backward compatibility */
@@ -135,12 +139,13 @@
   /* Nimble Typography Colors */
   --text-primary: #282a2f;
   --text-secondary: #5a5e66;
-  --text-tertiary: #8a8d94;
+  --text-tertiary: #626873; /* Contraste >= 4.5:1 sobre branco */
 
   /* Nimble Borders & Separators */
   --separator: rgba(0, 0, 0, 0.08);
   --border: rgba(0, 0, 0, 0.12);
   --border-strong: rgba(0, 0, 0, 0.20);
+  --border-subtle: var(--border);
   --hover-overlay: rgba(0, 0, 0, 0.05);
 
   /* Mockup Tokens (Diff Viewer / Code Preview / Window) */
@@ -169,6 +174,7 @@
   --color-on-primary: var(--brand-text);
   --color-danger: var(--negative);
   --color-success: var(--positive);
+  --danger: var(--negative-text);
   --gradient-brand: linear-gradient(135deg, var(--brand), #4b86ff 56%, #8e5ae8);
   --shadow-card: var(--shadow-sm);
   --glow-primary: 0 0 24px color-mix(in srgb, var(--brand) 22%, transparent);
@@ -182,8 +188,8 @@
   --background-very-dark: #eef0f3;
 
   /* Component tokens */
-  --button-bg: var(--brand);
-  --button-fg: var(--brand-text);
+  --button-bg: #005bff;
+  --button-fg: #ffffff;
   --button-radius: var(--radius-button);
   --card-bg: var(--surface-1);
   --card-border: var(--border);
@@ -231,6 +237,7 @@
   --separator: rgba(255, 255, 255, 0.10);
   --border: rgba(255, 255, 255, 0.14);
   --border-strong: rgba(255, 255, 255, 0.24);
+  --border-subtle: var(--border);
   --hover-overlay: rgba(255, 255, 255, 0.08);
 
   /* Mockup Tokens (Diff Viewer / Code Preview / Window) */
@@ -259,6 +266,7 @@
   --color-on-primary: var(--brand-text);
   --color-danger: var(--negative-text);
   --color-success: var(--positive-text);
+  --danger: var(--negative-text);
   --gradient-brand: linear-gradient(135deg, var(--brand), #4b86ff 56%, #a78bfa);
   --shadow-card: 0 16px 48px rgba(0, 0, 0, 0.38);
 
@@ -286,8 +294,8 @@
   --background-very-dark: #1b202a;
 
   /* Component tokens */
-  --button-bg: var(--brand);
-  --button-fg: var(--brand-text);
+  --button-bg: #005bff; /* Contraste >= 4.5:1 com texto branco */
+  --button-fg: #ffffff;
   --button-radius: var(--radius-button);
   --card-bg: var(--surface-1);
   --card-border: var(--border);
@@ -331,6 +339,7 @@
     --separator: rgba(255, 255, 255, 0.10);
     --border: rgba(255, 255, 255, 0.14);
     --border-strong: rgba(255, 255, 255, 0.24);
+    --border-subtle: var(--border);
     --hover-overlay: rgba(255, 255, 255, 0.08);
 
     --mock-background: #0b0d12;
@@ -357,6 +366,7 @@
     --color-on-primary: var(--brand-text);
     --color-danger: var(--negative-text);
     --color-success: var(--positive-text);
+    --danger: var(--negative-text);
     --gradient-brand: linear-gradient(135deg, var(--brand), #4b86ff 56%, #a78bfa);
     --shadow-card: 0 16px 48px rgba(0, 0, 0, 0.38);
     --glow-primary: 0 0 28px rgba(0, 91, 255, 0.32);
@@ -369,8 +379,8 @@
     --focus-ring: color-mix(in srgb, var(--brand) 65%, transparent);
     --background-very-dark: #1b202a;
 
-    --button-bg: var(--brand);
-    --button-fg: var(--brand-text);
+    --button-bg: #005bff;
+    --button-fg: #ffffff;
     --button-radius: var(--radius-button);
     --card-bg: var(--surface-1);
     --card-border: var(--border);

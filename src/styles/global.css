@@ -4436,6 +4436,93 @@ img, svg {
 }
 
 /* =====================================================================
+   Meeting Detail & Calendar Layouts (QA-01)
+   ===================================================================== */
+.meeting-detail-layout {
+  display: grid;
+  gap: var(--space-6);
+  margin-block: var(--space-6);
+}
+
+.meeting-meta,
+.meeting-context-tags,
+.meeting-links,
+.club-header-actions,
+.meeting-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.meeting-management,
+.meeting-detail-card {
+  padding: var(--space-card-p);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.meeting-details-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.meeting-detail-layout aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.meeting-detail-card a,
+.meeting-detail-card p {
+  overflow-wrap: anywhere;
+}
+
+.meeting-detail-card .meeting-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meeting-detail-card .meeting-links .button {
+  width: 100%;
+}
+
+.callout {
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-card, 12px);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  margin-block: var(--space-4, 16px);
+}
+
+.callout-warning {
+  border-color: var(--warning, #eab308);
+  background: color-mix(in srgb, var(--warning, #eab308) 10%, transparent);
+}
+
+.callout-info {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+@media (min-width: 860px) {
+  .meeting-detail-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .meeting-links > .button,
+  .form-actions > .button {
+    width: 100%;
+  }
+}
+
+/* =====================================================================
    Ranking Tabs and Book Rankings
    ===================================================================== */
 .ranking-tabs {

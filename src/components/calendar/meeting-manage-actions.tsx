@@ -38,21 +38,21 @@ export function MeetingManageActions({ meeting, chapters = [] }: MeetingManageAc
   if (meeting.status === 'cancelled') {
     return (
       <div className="callout callout-warning">
-        <p className="font-semibold">Este encontro foi cancelado pela moderação.</p>
+        <p style={{ fontWeight: 600 }}>Este encontro foi cancelado pela moderação.</p>
       </div>
     );
   }
 
   return (
-    <div className="meeting-manage-panel card p-6 mt-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <div className="meeting-management" style={{ marginTop: 'var(--space-6)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
         <div>
-          <h3 className="text-lg font-semibold">Painel da Moderação</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3>Painel da Moderação</h3>
+          <p className="field-hint">
             Gerencie as informações ou o status deste encontro.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="meeting-management-actions">
           <button
             type="button"
             className="button button-small button-outline"
@@ -71,7 +71,7 @@ export function MeetingManageActions({ meeting, chapters = [] }: MeetingManageAc
               Cancelar encontro
             </button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="meeting-management-actions">
               <button
                 type="button"
                 className="button button-small button-danger"
@@ -94,13 +94,13 @@ export function MeetingManageActions({ meeting, chapters = [] }: MeetingManageAc
       </div>
 
       {errorMsg ? (
-        <div role="alert" className="error-banner mb-4">
+        <div role="alert" className="error-banner" style={{ marginBottom: 'var(--space-4)' }}>
           {errorMsg}
         </div>
       ) : null}
 
       {isEditing ? (
-        <div className="mt-4 border-t pt-4">
+        <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
           <MeetingForm
             mode="edit"
             clubId={meeting.club?.id ?? ''}

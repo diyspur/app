@@ -110,6 +110,10 @@ export default async function ClubSettingsPage({ params }: { params: Params }) {
           ← Voltar para {club.name}
         </Link>
       </div>
+      <header className="page-intro">
+        <span className="eyebrow">Gestão do clube</span>
+        <h1>Configurações de {club.name}</h1>
+      </header>
       <ClubManagement
         club={club}
         members={members}

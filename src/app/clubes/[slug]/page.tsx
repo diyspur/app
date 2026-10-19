@@ -141,7 +141,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
             </span>
           </div>
         </div>
-        <div className="club-header-actions flex flex-wrap gap-2 items-center">
+        <div className="club-header-actions">
           <ClubMembershipActions
             clubId={club.id}
             isMember={data.isMember}
@@ -150,7 +150,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
             pendingInvitationId={pendingInvitation?.data?.id ?? null}
           />
           {canManage && (
-            <div className="flex gap-2">
+            <div className="meeting-management-actions">
               <Link
                 href={`/clubes/${club.slug}/configuracoes`}
                 className="btn btn-secondary btn-sm"
@@ -169,8 +169,8 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
       </header>
 
       {pendingInvitation?.data && !data.isMember && (
-        <div className="callout callout-info my-4 flex items-center justify-between gap-4 p-4">
-          <p className="m-0">
+        <div className="callout callout-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+          <p style={{ margin: 0 }}>
             <strong>Você recebeu um convite</strong> para participar do clube {club.name}.
           </p>
           <ClubMembershipActions
@@ -232,7 +232,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
                     : 'Entre para acompanhar a leitura.'}
           </p>
           {canManage && (
-            <p className="field-hint text-xs mt-2">
+            <p className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
               Você tem permissão de moderação para agendar encontros e configurar canais.
             </p>
           )}
@@ -240,7 +240,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
       </div>
 
       {channels.length > 0 && (
-        <section className="section club-channels-section mt-8">
+        <section className="section club-channels-section" style={{ marginTop: 'var(--space-8)' }}>
           <div className="section-head">
             <div>
               <span className="eyebrow">Espaço de Comunidade</span>
@@ -250,7 +250,7 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
               </p>
             </div>
           </div>
-          <div className="card p-4">
+          <div className="member-card">
             <ChannelDirectory clubSlug={club.slug} channels={channels} />
           </div>
         </section>

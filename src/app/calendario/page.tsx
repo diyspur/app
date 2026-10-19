@@ -90,18 +90,18 @@ export default async function CalendarPage() {
         </div>
         <div style={{ flex: 1 }}>
           <h3>
-            <Link href={`/eventos/${meeting.id}`} className="hover:underline">
+            <Link href={`/eventos/${meeting.id}`}>
               {meeting.title}
             </Link>
           </h3>
-          <div className="flex flex-wrap gap-2 my-1 text-xs">
+          <div className="meeting-context-tags">
             {meeting.books?.title && (
-              <Link href={`/livros/${meeting.books.slug}`} className="badge badge-secondary hover:underline">
+              <Link href={`/livros/${meeting.books.slug}`} className="badge badge-secondary">
                 📖 {meeting.books.title}
               </Link>
             )}
             {meeting.user_clubs?.name && (
-              <Link href={`/clubes/${meeting.user_clubs.slug}`} className="badge badge-secondary hover:underline">
+              <Link href={`/clubes/${meeting.user_clubs.slug}`} className="badge badge-secondary">
                 👥 {meeting.user_clubs.name}
               </Link>
             )}
@@ -111,8 +111,8 @@ export default async function CalendarPage() {
             {meeting.duration_min ? ` · ${meeting.duration_min} min` : ''} · horário de Brasília
           </p>
           {meeting.agenda && <p>{meeting.agenda}</p>}
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-sm">
-            <Link href={`/eventos/${meeting.id}`} className="text-link font-medium">
+          <div className="meeting-links">
+            <Link href={`/eventos/${meeting.id}`} className="text-link">
               Ver detalhes do encontro &rarr;
             </Link>
             {meeting.meeting_url && /^https:\/\//i.test(meeting.meeting_url) && !['finished', 'cancelled'].includes(state) ? (
@@ -122,7 +122,7 @@ export default async function CalendarPage() {
             ) : null}
           </div>
           {state !== 'cancelled' && (
-            <div className="mt-3">
+            <div style={{ marginTop: 'var(--space-3)' }}>
               <MeetingRsvp
                 meetingId={meeting.id}
                 initialAttending={rsvps[meeting.id] ?? null}
@@ -181,10 +181,10 @@ export default async function CalendarPage() {
         </h1>
         <p>Encontros para dividir impressões, ouvir outros pontos de vista e descobrir novas camadas das histórias.</p>
         {managedClubs.length > 0 && (
-          <div className="mt-4">
+          <div style={{ marginTop: 'var(--space-4)' }}>
             <Link
               href={`/clubes/${managedClubs[0].slug}/eventos/novo`}
-              className="button button-small button-primary inline-flex items-center gap-1"
+              className="button button-small button-primary"
             >
               + Agendar encontro em {managedClubs[0].name}
             </Link>

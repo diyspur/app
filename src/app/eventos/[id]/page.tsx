@@ -116,14 +116,14 @@ export default async function MeetingDetailPage({
     <main id="main-content" className="shell-container page-stack">
       <JsonLd data={eventSchema as unknown as Record<string, unknown>} />
 
-      <nav aria-label="Navegação estrutural" className="breadcrumbs-nav mb-4">
-        <Link href="/calendario" className="text-sm text-muted-foreground hover:underline">
+      <nav aria-label="Navegação estrutural" className="breadcrumbs">
+        <Link href="/calendario" className="text-link">
           &larr; Voltar para o Calendário
         </Link>
       </nav>
 
-      <header className="meeting-detail-header card p-6">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
+      <header className="meeting-detail-header meeting-detail-card">
+        <div className="meeting-meta">
           <span className={`status-badge ${currentStatus.class}`}>
             {currentStatus.label}
           </span>
@@ -139,40 +139,40 @@ export default async function MeetingDetailPage({
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight mb-3">{meeting.title}</h1>
+        <h1 style={{ marginBlock: 'var(--space-3)' }}>{meeting.title}</h1>
 
-        <p className="text-lg text-primary font-medium mb-4">
+        <p style={{ marginBlock: 'var(--space-3)', color: 'var(--brand)', fontWeight: 'var(--weight-medium)' }}>
           <time dateTime={meeting.scheduledAt}>{formattedDate}</time> (Horário de Brasília)
-          <span className="text-muted-foreground font-normal ml-2">
+          <span style={{ color: 'var(--text-tertiary)', fontWeight: 'normal', marginLeft: 'var(--space-2)' }}>
             &bull; Duração: {meeting.durationMin} min
           </span>
         </p>
 
-        <div className="flex flex-wrap gap-4 text-sm border-t pt-4">
+        <div className="meeting-context-tags" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-4)' }}>
           <div>
-            <span className="text-muted-foreground block text-xs uppercase font-semibold">
+            <span className="field-hint" style={{ display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
               Livro
             </span>
             {meeting.book.slug ? (
               <Link
                 href={`/livros/${meeting.book.slug}`}
-                className="font-medium text-primary hover:underline"
+                className="text-link"
               >
                 {meeting.book.title}
               </Link>
             ) : (
-              <span className="font-medium">{meeting.book.title}</span>
+              <span>{meeting.book.title}</span>
             )}
           </div>
 
           {meeting.club ? (
             <div>
-              <span className="text-muted-foreground block text-xs uppercase font-semibold">
+              <span className="field-hint" style={{ display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
                 Clube
               </span>
               <Link
                 href={`/clubes/${meeting.club.slug}`}
-                className="font-medium text-primary hover:underline"
+                className="text-link"
               >
                 {meeting.club.name}
               </Link>
@@ -181,12 +181,12 @@ export default async function MeetingDetailPage({
 
           {meeting.chapter ? (
             <div>
-              <span className="text-muted-foreground block text-xs uppercase font-semibold">
+              <span className="field-hint" style={{ display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
                 Capítulo em foco
               </span>
               <Link
                 href={`/capitulos/${meeting.chapter.id}`}
-                className="font-medium text-primary hover:underline"
+                className="text-link"
               >
                 Cap. {meeting.chapter.number}: {meeting.chapter.title}
               </Link>
@@ -195,28 +195,28 @@ export default async function MeetingDetailPage({
         </div>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
-        <div className="md:col-span-2 space-y-6">
-          <article className="card p-6">
-            <h2 className="text-xl font-semibold mb-3">Sobre o Encontro</h2>
+      <section className="meeting-detail-layout">
+        <div className="meeting-details-body">
+          <article className="meeting-detail-card">
+            <h2 style={{ marginBottom: 'var(--space-3)' }}>Sobre o Encontro</h2>
             {meeting.agenda ? (
-              <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-wrap">
+              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
                 {meeting.agenda}
               </div>
             ) : (
-              <p className="text-muted-foreground italic">
+              <p className="field-hint" style={{ fontStyle: 'italic' }}>
                 Nenhuma pauta ou observação cadastrada para este encontro.
               </p>
             )}
 
             {safeMeetingUrl ? (
-              <div className="mt-6 pt-4 border-t">
-                <h3 className="text-sm font-semibold mb-2">Acesso à Transmissão Online</h3>
+              <div style={{ marginTop: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+                <h3 style={{ marginBottom: 'var(--space-2)' }}>Acesso à Transmissão Online</h3>
                 <a
                   href={safeMeetingUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="button button-primary inline-flex items-center gap-2"
+                  className="button button-primary"
                 >
                   Entrar na chamada de vídeo &rarr;
                 </a>
@@ -224,42 +224,42 @@ export default async function MeetingDetailPage({
             ) : null}
 
             {meeting.location ? (
-              <div className="mt-4 pt-4 border-t">
-                <h3 className="text-sm font-semibold mb-1">Localização Física</h3>
-                <p className="text-muted-foreground">{meeting.location}</p>
+              <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+                <h3 style={{ marginBottom: 'var(--space-1)' }}>Localização Física</h3>
+                <p>{meeting.location}</p>
               </div>
             ) : null}
           </article>
         </div>
 
-        <aside className="space-y-6">
-          <div className="card p-6">
+        <aside>
+          <div className="meeting-detail-card">
             <MeetingRsvp
               meetingId={meeting.id}
               initialAttending={meeting.userRsvp}
               signedIn={Boolean(meeting.viewerId)}
               disabled={meeting.status === 'cancelled' || meeting.status === 'done'}
             />
-            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+            <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }} className="field-hint">
               <strong>{meeting.attendeesCount}</strong> participante(s) confirmaram presença.
             </div>
           </div>
 
-          <div className="card p-6">
-            <h3 className="text-base font-semibold mb-3">Adicionar à sua Agenda</h3>
-            <div className="flex flex-col gap-2">
+          <div className="meeting-detail-card">
+            <h3 style={{ marginBottom: 'var(--space-3)' }}>Adicionar à sua Agenda</h3>
+            <div className="meeting-links">
               <a
                 href={googleCalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="button button-outline text-center"
+                className="button button-outline"
               >
                 Google Agenda
               </a>
               <a
                 href={`/api/ics/${meeting.id}`}
                 download={`${meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`}
-                className="button button-outline text-center"
+                className="button button-outline"
               >
                 Baixar .ICS (Apple / Outlook)
               </a>

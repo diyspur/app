@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useTransition, type FormEvent } from 'react';
+import { useState, useEffect, useTransition, type FormEvent } from 'react';
 import { createJournalEntry } from '@/features/journal/actions';
+import { localDateInputValue } from '@/lib/reading-date';
 
 export function JournalEntryForm({
   books,
@@ -10,6 +11,11 @@ export function JournalEntryForm({
 }) {
   const [busy, startTransition] = useTransition();
   const [feedback, setFeedback] = useState('');
+  const [entryDate, setEntryDate] = useState('');
+
+  useEffect(() => {
+    setEntryDate(localDateInputValue());
+  }, []);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,7 +35,10 @@ export function JournalEntryForm({
         isSpoiler: d.get('isSpoiler') === 'on',
       });
       setFeedback(result.message);
-      if (result.ok) form.reset();
+      if (result.ok) {
+        form.reset();
+        setEntryDate(localDateInputValue());
+      }
     });
   }
 
@@ -64,7 +73,8 @@ export function JournalEntryForm({
           id="journal-date"
           type="date"
           name="entryDate"
-          defaultValue={new Date().toISOString().slice(0, 10)}
+          value={entryDate}
+          onChange={(e) => setEntryDate(e.target.value)}
           required
         />
       </div>

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/session';
 import { JournalEntryForm } from '@/components/journal/journal-entry-form';
 import { JournalEntryItem } from '@/components/journal/journal-entry-item';
-import { getJournalEntries } from '@/features/journal/queries';
+import { getJournalEntries, getBooksByIds } from '@/features/journal/queries';
 
 type BookOption = { id: string; title: string };
 
@@ -34,7 +34,13 @@ export default async function JournalPage({
 
   const books = (rawBooks ?? []) as BookOption[];
   const entries = journal.data ?? [];
+  const referencedBookIds = Array.from(new Set(entries.map((entry) => entry.book_id)));
+  const referencedBooks = await getBooksByIds(referencedBookIds, session.client);
+
   const bookMap = new Map<string, string>(books.map((book) => [book.id, book.title]));
+  for (const book of referencedBooks) {
+    bookMap.set(book.id, book.title);
+  }
 
   return (
     <section className="container">

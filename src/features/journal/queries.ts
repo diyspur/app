@@ -83,3 +83,21 @@ export async function getJournalEntries(
       : null,
   };
 }
+
+export async function getBooksByIds(
+  bookIds: string[],
+  customClient?: { from: (table: string) => any },
+): Promise<{ id: string; title: string }[]> {
+  const uniqueIds = Array.from(new Set(bookIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  const supabase = customClient ?? (await createServerSupabase());
+  const { data, error } = await supabase
+    .from('books')
+    .select('id,title')
+    .in('id', uniqueIds);
+
+  if (error || !data) return [];
+  return data as { id: string; title: string }[];
+}
+

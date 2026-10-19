@@ -151,4 +151,90 @@ describe('Journal Actions & Schemas (QA-22, QA-24)', () => {
       expect(eqVersionMock).toHaveBeenCalledWith('version', 1);
     });
   });
+
+  describe('Book dictionary resolution beyond 100-limit (QA-12)', () => {
+    it('returns empty array when bookIds is empty', async () => {
+      const { getBooksByIds } = await import('@/features/journal/queries');
+      const res = await getBooksByIds([]);
+      expect(res).toEqual([]);
+    });
+
+    it('deduplicates book IDs and filters empty strings', async () => {
+      const { getBooksByIds } = await import('@/features/journal/queries');
+      const inMock = vi.fn().mockResolvedValue({
+        data: [{ id: 'b-1', title: 'Dom Casmurro' }],
+        error: null,
+      });
+      const selectMock = vi.fn().mockReturnValue({ in: inMock });
+      const mockClient = {
+        from: vi.fn().mockReturnValue({ select: selectMock }),
+      };
+
+      const res = await getBooksByIds(['b-1', 'b-1', ''], mockClient as any);
+      expect(mockClient.from).toHaveBeenCalledWith('books');
+      expect(selectMock).toHaveBeenCalledWith('id,title');
+      expect(inMock).toHaveBeenCalledWith('id', ['b-1']);
+      expect(res).toEqual([{ id: 'b-1', title: 'Dom Casmurro' }]);
+    });
+
+    it('resolves book titles beyond the first 100 catalog books in bookMap', async () => {
+      const { getBooksByIds } = await import('@/features/journal/queries');
+      // Simulate top 100 books from rawBooks (books 1 to 100)
+      const top100Books = Array.from({ length: 100 }, (_, i) => ({
+        id: `book-${i + 1}`,
+        title: `Livro ${i + 1}`,
+      }));
+
+      // Simulate a journal entry referencing book-105 (beyond top 100)
+      const entries = [
+        { id: 'entry-1', book_id: 'book-105', title: 'Reflexões' },
+        { id: 'entry-2', book_id: 'book-5', title: 'Notas' },
+      ];
+
+      const referencedBookIds = Array.from(new Set(entries.map((e) => e.book_id)));
+
+      const mockClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({
+              data: [
+                { id: 'book-105', title: 'Memórias Póstumas de Brás Cubas' },
+                { id: 'book-5', title: 'Livro 5' },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      };
+
+      const referencedBooks = await getBooksByIds(referencedBookIds, mockClient as any);
+
+      // Decoupled dictionary population logic from page.tsx
+      const bookMap = new Map<string, string>(top100Books.map((b) => [b.id, b.title]));
+      for (const book of referencedBooks) {
+        bookMap.set(book.id, book.title);
+      }
+
+      // Verify that book-105 does NOT fall back to 'Livro' but has its actual title
+      expect(bookMap.get('book-105')).toBe('Memórias Póstumas de Brás Cubas');
+      expect(bookMap.get('book-5')).toBe('Livro 5');
+    });
+
+    it('gracefully handles database errors and returns empty array', async () => {
+      const { getBooksByIds } = await import('@/features/journal/queries');
+      const mockClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'db error' },
+            }),
+          }),
+        }),
+      };
+
+      const res = await getBooksByIds(['b-999'], mockClient as any);
+      expect(res).toEqual([]);
+    });
+  });
 });

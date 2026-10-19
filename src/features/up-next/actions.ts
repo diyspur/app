@@ -31,11 +31,9 @@ export async function removeFromUpNext(bookId: string) {
   const session = await requireSession();
   if (!session) return { ok: false, message: 'Entre para alterar sua fila.' };
 
-  const { error } = await session.client
-    .from('user_up_next')
-    .delete()
-    .eq('user_id', session.userId)
-    .eq('book_id', parsed.data);
+  const { error } = await session.client.rpc('remove_from_up_next_atomic', {
+    p_book: parsed.data,
+  });
 
   if (error) return { ok: false, ...mapDatabaseError(error.code) };
   revalidatePath('/minha-fila');
@@ -55,7 +53,12 @@ export async function reorderUpNext(bookIds: string[]) {
     p_book_ids: parsed.data,
   });
 
-  if (error) return { ok: false, ...mapDatabaseError(error.code) };
+  if (error) {
+    if (error.code === '40900' || error.message?.includes('queue_changed_or_invalid_order')) {
+      return { ok: false, message: 'Sua fila foi modificada em outra janela. Recarregue para atualizar.' };
+    }
+    return { ok: false, ...mapDatabaseError(error.code) };
+  }
   revalidatePath('/minha-fila');
   return { ok: true, message: 'Fila reorganizada com sucesso.' };
 }

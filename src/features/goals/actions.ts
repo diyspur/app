@@ -35,8 +35,11 @@ export async function setReadingGoal(input: unknown) {
       });
 
       if (error) {
-        if (error.code === '40900' || error.message?.includes('conflict')) {
+        if (error.code === '40900' || error.message?.includes('conflict') || error.message?.includes('goal_archived')) {
           return { ok: false, message: 'Esta meta foi alterada em outra aba. Recarregue para atualizar.', code: 'conflict' as const };
+        }
+        if (error.code === 'P0002' || error.message?.includes('not_found')) {
+          return { ok: false, message: 'Meta de leitura não encontrada.', code: 'not_found' as const };
         }
         return { ok: false, ...mapDatabaseError(error.code) };
       }

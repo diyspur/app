@@ -49,19 +49,21 @@ describe('up-next actions (QA-06 continuous playlist)', () => {
   });
 
   it('successfully removes from queue', async () => {
-    const deleteMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: true,
+      error: null,
     });
     vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
       userId: 'user-1',
-      client: { from: vi.fn().mockReturnValue({ delete: deleteMock }) } as any,
+      client: { rpc: rpcMock } as any,
     } as any);
 
     const res = await removeFromUpNext('550e8400-e29b-41d4-a716-446655440000');
     expect(res.ok).toBe(true);
     expect(res.message).toBe('Livro removido da sua fila.');
+    expect(rpcMock).toHaveBeenCalledWith('remove_from_up_next_atomic', {
+      p_book: '550e8400-e29b-41d4-a716-446655440000',
+    });
   });
 
   it('rejects invalid uuid array on reorderUpNext', async () => {
@@ -90,5 +92,23 @@ describe('up-next actions (QA-06 continuous playlist)', () => {
     expect(rpcMock).toHaveBeenCalledWith('reorder_up_next', {
       p_book_ids: bookIds,
     });
+  });
+
+  it('handles 40900 conflict on reorderUpNext when queue changed concurrently', async () => {
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: '40900', message: 'queue_changed_or_invalid_order' },
+    });
+    vi.spyOn(sessionModule, 'requireSession').mockResolvedValue({
+      userId: 'user-1',
+      client: { rpc: rpcMock } as any,
+    } as any);
+
+    const res = await reorderUpNext([
+      '550e8400-e29b-41d4-a716-446655440001',
+      '550e8400-e29b-41d4-a716-446655440002',
+    ]);
+    expect(res.ok).toBe(false);
+    expect(res.message).toBe('Sua fila foi modificada em outra janela. Recarregue para atualizar.');
   });
 });

@@ -31,4 +31,21 @@ describe('reading goals schema (QA-23)', () => {
     expect(goalSchema.safeParse({ year: 2026, targetPages: 50000 }).success).toBe(true);
     expect(goalSchema.safeParse({ year: 2026, targetMinutes: 500000 }).success).toBe(true);
   });
+
+  it('enforces version requirement when goal id is provided (QA-20)', () => {
+    const withoutVersion = goalSchema.safeParse({
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      year: 2026,
+      targetBooks: 10,
+    });
+    expect(withoutVersion.success).toBe(false);
+
+    const withVersion = goalSchema.safeParse({
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      year: 2026,
+      targetBooks: 10,
+      version: 1,
+    });
+    expect(withVersion.success).toBe(true);
+  });
 });

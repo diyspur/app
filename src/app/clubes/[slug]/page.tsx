@@ -149,6 +149,9 @@ export default async function ClubPage({ params }: { params: Promise<{ slug: str
             isPrivate={club.is_private}
             pendingInvitationId={pendingInvitation?.data?.id ?? null}
           />
+          <Link href="/calendario" className="btn btn-secondary btn-sm">
+            Ver agenda de encontros →
+          </Link>
           {canManage && (
             <div className="meeting-management-actions">
               <Link

@@ -48,24 +48,31 @@ export default async function ReadingListPage({
         </div>
       ) : (
         <div className="book-grid" style={{ marginTop: '32px' }}>
-          {list.items.map((item) => (
-            <article key={item.id} className="book-card">
-              <Link href={`/livros/${encodeURIComponent(item.book?.slug || '')}`}>
-                <div className="book-card-cover">
-                  <BookCover
-                    src={item.book?.cover_url ?? null}
-                    title={item.book?.title || 'Livro'}
-                    width={300}
-                    height={450}
-                  />
-                </div>
-                <h3>{item.book?.title}</h3>
-                {item.book?.total_pages ? (
-                  <p className="field-hint">{item.book.total_pages} páginas</p>
-                ) : null}
-              </Link>
-            </article>
-          ))}
+          {list.items.map((item) =>
+            item.book ? (
+              <article key={item.id} className="book-card">
+                <Link href={`/livros/${encodeURIComponent(item.book.slug)}`}>
+                  <div className="book-card-cover">
+                    <BookCover
+                      src={item.book.cover_url ?? null}
+                      title={item.book.title || 'Livro'}
+                      width={300}
+                      height={450}
+                    />
+                  </div>
+                  <h3>{item.book.title}</h3>
+                  {item.book.total_pages ? (
+                    <p className="field-hint">{item.book.total_pages} páginas</p>
+                  ) : null}
+                </Link>
+              </article>
+            ) : (
+              <article key={item.id} className="book-card">
+                <h3>Este livro não está disponível no momento</h3>
+                <p className="field-hint">O item continua na lista, mas o livro não pôde ser carregado.</p>
+              </article>
+            ),
+          )}
         </div>
       )}
 

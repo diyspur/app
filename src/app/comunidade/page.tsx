@@ -113,6 +113,9 @@ export default async function CommunityPage() {
           <Link className="button button-small" href="/clubes/novo">
             Criar um clube
           </Link>
+          <Link className="button button-quiet button-small" href="/clubes">
+            Explorar todos os clubes →
+          </Link>
           <Link className="button button-quiet button-small" href="/livros">
             Explorar livros
           </Link>

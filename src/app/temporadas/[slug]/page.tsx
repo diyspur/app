@@ -176,7 +176,7 @@ export default async function SeasonPage({
           }
         >
           {(chapterRows) =>
-            chapterRows.map((row, index) => {
+            chapterRows.map((row) => {
               const chapter = chapterById.get(row.chapter_id);
               const title = formatChapterTitle(row.chapter_title, row.chapter_number);
               const range = formatReadingRange(row.reading_range, row.chapter_number);
@@ -199,9 +199,7 @@ export default async function SeasonPage({
                     <h3>{title}</h3>
                     {subtitle ? <p>{subtitle}</p> : null}
                   </div>
-                  <span className={`status-pill ${index === 0 ? '' : 'neutral'}`}>
-                    {index === 0 ? 'Começar leitura' : 'Abrir capítulo'}
-                  </span>
+                  <span className="status-pill neutral">Abrir capítulo</span>
                 </Link>
               ) : (
                 <div

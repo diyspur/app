@@ -86,6 +86,8 @@ export async function getJournalEntries(
 
 export async function getBooksByIds(
   bookIds: string[],
+  // Structural type on purpose: tests inject a minimal mock exposing only .from().
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customClient?: { from: (table: string) => any },
 ): Promise<{ id: string; title: string }[]> {
   const uniqueIds = Array.from(new Set(bookIds.filter(Boolean)));

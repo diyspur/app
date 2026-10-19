@@ -79,7 +79,24 @@ export function QueueManagement({ initialItems }: { initialItems: UpNextItem[] }
       <div className="timeline">
         {items.map((item, index) => {
           const book = item.book;
-          if (!book) return null;
+          if (!book) {
+            return (
+              <article className="member-card" key={item.book_id}>
+                <span className="eyebrow">Posição #{index + 1}</span>
+                <h3 style={{ margin: '0.25rem 0' }}>Este livro não está disponível no momento</h3>
+                <p className="field-hint">Você pode removê-lo da fila.</p>
+                <button
+                  className="button button-quiet button-small"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleRemove(item.book_id)}
+                  aria-label="Remover livro indisponível da fila"
+                >
+                  Remover
+                </button>
+              </article>
+            );
+          }
           return (
             <article className="member-card" key={item.book_id}>
               <div className="section-head" style={{ alignItems: 'flex-start' }}>

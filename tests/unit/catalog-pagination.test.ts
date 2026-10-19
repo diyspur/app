@@ -201,6 +201,267 @@ describe('Catalog Deep Pagination (> 500 books)', () => {
     expect(result.data.books[0].authors?.name).toBeDefined();
   });
 
+  it('seamlessly queries database range when navigating beyond capped candidate pool (QA-13)', async () => {
+    const clientsModule = await import('@/lib/supabase/clients');
+
+    const TOTAL_BOOKS = 650;
+    const CANDIDATE_CAP = 500;
+    const allMockBooks = Array.from({ length: TOTAL_BOOKS }, (_, i) => ({
+      id: `book-${i + 1}`,
+      title: `Book Title ${i + 1}`,
+      slug: `book-${i + 1}`,
+      author_id: `author-${(i % 10) + 1}`,
+      cover_url: null,
+      isbn13: null,
+      language: 'pt-BR',
+      synopsis: `Synopsis for book ${i + 1}`,
+      total_chapters: 15,
+      total_pages: 250,
+      publication_year: 2024,
+      tags: ['ficcao'],
+      amazon_url: null,
+      publisher: 'Editora Teste',
+      translator: null,
+      publication_date: '2024-01-01',
+      content_rating: 'livre',
+      edition_number: 1,
+      format: 'Capa comum',
+      width_mm: 140,
+      height_mm: 210,
+      depth_mm: 15,
+    }));
+
+    let rangeCalledWith: [number, number] | null = null;
+
+    const supabaseMock = {
+      auth: {
+        getClaims: vi.fn().mockResolvedValue({
+          data: { claims: { sub: 'reader-user-13' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'user_book_readings') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [{ book_id: 'book-1', status: 'read' }],
+                error: null,
+              }),
+            }),
+          };
+        }
+
+        if (table === 'authors') {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockImplementation((_field: string, ids: string[]) =>
+                Promise.resolve({
+                  data: ids.map((id) => ({ id, name: `Author ${id}` })),
+                  error: null,
+                })
+              ),
+            }),
+          };
+        }
+
+        if (table === 'books') {
+          let currentRange: [number, number] | null = null;
+          let inIds: string[] | null = null;
+
+          const builder: any = {
+            select: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            ilike: vi.fn().mockReturnThis(),
+            range: vi.fn((from: number, to: number) => {
+              currentRange = [from, to];
+              rangeCalledWith = [from, to];
+              return builder;
+            }),
+            in: vi.fn((_field: string, ids: string[]) => {
+              inIds = ids;
+              return builder;
+            }),
+            then: (resolve: (val: any) => void) => {
+              if (inIds) {
+                return Promise.resolve({
+                  data: allMockBooks.filter((b) => inIds!.includes(b.id)),
+                  error: null,
+                }).then(resolve);
+              }
+
+              if (currentRange) {
+                // Range query for books beyond candidate pool
+                const sliced = allMockBooks.slice(currentRange[0], currentRange[1] + 1);
+                return Promise.resolve({
+                  data: sliced,
+                  error: null,
+                }).then(resolve);
+              }
+
+              // Candidate query: returns only up to CANDIDATE_CAP (500) but count is TOTAL_BOOKS (650)
+              return Promise.resolve({
+                data: allMockBooks.slice(0, CANDIDATE_CAP),
+                count: TOTAL_BOOKS,
+                error: null,
+              }).then(resolve);
+            },
+          };
+
+          return builder;
+        }
+
+        return {};
+      }),
+    };
+
+    vi.spyOn(clientsModule, 'createServerSupabase').mockResolvedValue(supabaseMock as any);
+
+    const { getBooksResult } = await import('@/features/catalog/queries');
+    // Page 25: offset 576, limit 24 -> range(576, 599)
+    const result = await getBooksResult(undefined, 25, 24);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Query failed');
+
+    expect(rangeCalledWith).toEqual([576, 599]);
+    expect(result.data.total).toBe(650);
+    expect(result.data.page).toBe(25);
+    expect(result.data.books.length).toBe(24);
+    expect(result.data.books[0].id).toBe('book-577');
+    expect(result.data.books[23].id).toBe('book-600');
+  });
+
+  it('stitches candidates and database range seamlessly on boundary page (QA-13)', async () => {
+    const clientsModule = await import('@/lib/supabase/clients');
+
+    const TOTAL_BOOKS = 600;
+    const CANDIDATE_CAP = 500;
+    const allMockBooks = Array.from({ length: TOTAL_BOOKS }, (_, i) => ({
+      id: `book-${i + 1}`,
+      title: `Book Title ${i + 1}`,
+      slug: `book-${i + 1}`,
+      author_id: `author-${(i % 10) + 1}`,
+      cover_url: null,
+      isbn13: null,
+      language: 'pt-BR',
+      synopsis: `Synopsis for book ${i + 1}`,
+      total_chapters: 15,
+      total_pages: 250,
+      publication_year: 2024,
+      tags: ['ficcao'],
+      amazon_url: null,
+      publisher: 'Editora Teste',
+      translator: null,
+      publication_date: '2024-01-01',
+      content_rating: 'livre',
+      edition_number: 1,
+      format: 'Capa comum',
+      width_mm: 140,
+      height_mm: 210,
+      depth_mm: 15,
+    }));
+
+    let boundaryRange: [number, number] | null = null;
+
+    const supabaseMock = {
+      auth: {
+        getClaims: vi.fn().mockResolvedValue({
+          data: { claims: { sub: 'reader-boundary-13' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'user_book_readings') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [{ book_id: 'book-1', status: 'read' }],
+                error: null,
+              }),
+            }),
+          };
+        }
+
+        if (table === 'authors') {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockImplementation((_field: string, ids: string[]) =>
+                Promise.resolve({
+                  data: ids.map((id) => ({ id, name: `Author ${id}` })),
+                  error: null,
+                })
+              ),
+            }),
+          };
+        }
+
+        if (table === 'books') {
+          let currentRange: [number, number] | null = null;
+          let inIds: string[] | null = null;
+
+          const builder: any = {
+            select: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            ilike: vi.fn().mockReturnThis(),
+            range: vi.fn((from: number, to: number) => {
+              currentRange = [from, to];
+              boundaryRange = [from, to];
+              return builder;
+            }),
+            in: vi.fn((_field: string, ids: string[]) => {
+              inIds = ids;
+              return builder;
+            }),
+            then: (resolve: (val: any) => void) => {
+              if (inIds) {
+                return Promise.resolve({
+                  data: allMockBooks.filter((b) => inIds!.includes(b.id)),
+                  error: null,
+                }).then(resolve);
+              }
+
+              if (currentRange) {
+                const sliced = allMockBooks.slice(currentRange[0], currentRange[1] + 1);
+                return Promise.resolve({
+                  data: sliced,
+                  error: null,
+                }).then(resolve);
+              }
+
+              return Promise.resolve({
+                data: allMockBooks.slice(0, CANDIDATE_CAP),
+                count: TOTAL_BOOKS,
+                error: null,
+              }).then(resolve);
+            },
+          };
+
+          return builder;
+        }
+
+        return {};
+      }),
+    };
+
+    vi.spyOn(clientsModule, 'createServerSupabase').mockResolvedValue(supabaseMock as any);
+
+    const { getBooksResult } = await import('@/features/catalog/queries');
+    // Page 21: offset 480, limit 24.
+    // Ranked candidate pool has 500 books.
+    // Candidate slice: 480..500 (20 books).
+    // Needed: 4 books from range [500, 503].
+    const result = await getBooksResult(undefined, 21, 24);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Query failed');
+
+    expect(boundaryRange).toEqual([500, 503]);
+    expect(result.data.total).toBe(600);
+    expect(result.data.page).toBe(21);
+    expect(result.data.books.length).toBe(24);
+  });
+
   it('queries candidates with lightweight projection (id, author_id, tags) and fetches full projection only for pageIds', async () => {
     const clientsModule = await import('@/lib/supabase/clients');
 

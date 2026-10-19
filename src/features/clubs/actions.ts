@@ -283,3 +283,13 @@ export async function removeMember(input: unknown): Promise<Result> {
     }
   )(input);
 }
+
+export async function getVisibleClubsAction(options?: {
+  search?: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  const { getVisibleClubsPaginated } = await import('./queries');
+  return getVisibleClubsPaginated(options);
+}
+

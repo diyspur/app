@@ -1,14 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getVisibleClubs } from '@/features/clubs/queries';
-
-type ClubCard = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  is_private: boolean;
-};
+import { getVisibleClubsPaginated } from '@/features/clubs/queries';
+import { ClubSearch } from '@/components/clubs/club-search';
 
 export const metadata: Metadata = {
   title: 'Clubes de leitura',
@@ -16,8 +9,18 @@ export const metadata: Metadata = {
   alternates: { canonical: '/clubes' },
 };
 
-export default async function ClubsPage() {
-  const { clubs, error, userId } = await getVisibleClubs();
+export default async function ClubsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const query = typeof params.q === 'string' ? params.q.trim() : '';
+
+  const { clubs, nextCursor, error, userId } = await getVisibleClubsPaginated({
+    search: query,
+    limit: 24,
+  });
 
   return (
     <section className="container">
@@ -44,30 +47,14 @@ export default async function ClubsPage() {
         <div className="notice" role="alert">
           Não foi possível carregar os clubes agora.
         </div>
-      ) : clubs.length ? (
-        <div className="section" style={{ paddingTop: 12 }}>
-          <div className="timeline">
-            {clubs.map((club: ClubCard) => (
-              <Link className="member-card" href={`/clubes/${club.slug}`} key={club.id}>
-                <div className="section-head" style={{ marginBottom: 8 }}>
-                  <div>
-                    <span className="eyebrow">{club.is_private ? 'Privado' : 'Público'}</span>
-                    <h2>{club.name}</h2>
-                  </div>
-                  <span className="status-pill neutral">Abrir →</span>
-                </div>
-                {club.description && <p>{club.description}</p>}
-              </Link>
-            ))}
-          </div>
-        </div>
       ) : (
-        <div className="empty-state">
-          <div className="empty-state-mark" aria-hidden="true">◌</div>
-          <h2>Nenhum clube público ainda</h2>
-          <p>Você pode inaugurar a primeira conversa.</p>
-        </div>
+        <ClubSearch
+          initialClubs={clubs}
+          initialCursor={nextCursor}
+          initialQuery={query}
+        />
       )}
     </section>
   );
 }
+

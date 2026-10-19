@@ -170,52 +170,158 @@ export const getBooksResult = cache(
       }
 
       const totalPages = Math.max(1, Math.ceil(total / limit));
-      const pageSliceIds = rankedIds.slice(offset, offset + limit);
+      let paginatedBooks: Book[] = [];
 
-      if (!pageSliceIds.length) {
-        return querySuccess({
-          books: [],
-          total,
-          page,
-          totalPages,
-          isPersonalized: true,
+      if (offset >= rankedIds.length) {
+        if (offset >= total) {
+          return querySuccess({
+            books: [],
+            total,
+            page,
+            totalPages,
+            isPersonalized: true,
+          });
+        }
+
+        let fallbackQuery = client
+          .from('books')
+          .select(FULL_BOOK_COLUMNS)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(offset, offset + limit - 1);
+
+        if (term) fallbackQuery = fallbackQuery.ilike('title', `%${term}%`);
+
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+        if (fallbackError) {
+          console.error('Catalog fallback range query failed', fallbackError.code);
+          return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
+        }
+
+        const fallbackBooks = (fallbackData ?? []) as Book[];
+        const authorIds = Array.from(new Set(fallbackBooks.map((b) => b.author_id).filter(Boolean)));
+        const { data: authors } = authorIds.length
+          ? await client.from('authors').select('id,name').in('id', authorIds)
+          : { data: [] };
+
+        const authorMap = new Map((authors ?? []).map((a) => [a.id, a.name]));
+        paginatedBooks = fallbackBooks.map((book) => ({
+          ...book,
+          authors: { name: authorMap.get(book.author_id) ?? 'Autor(a)' },
+          readingStatus: userReadingsMap?.get(book.id) ?? null,
+        }));
+      } else if (offset + limit > rankedIds.length && rankedIds.length < total) {
+        const candidateSliceIds = rankedIds.slice(offset);
+        const needed = limit - candidateSliceIds.length;
+
+        const { data: fullBooksData, error: fullError } = await client
+          .from('books')
+          .select(FULL_BOOK_COLUMNS)
+          .in('id', candidateSliceIds);
+
+        if (fullError) {
+          console.error('Catalog full books query failed', fullError.code);
+          return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
+        }
+
+        let fallbackQuery = client
+          .from('books')
+          .select(FULL_BOOK_COLUMNS)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(rankedIds.length, rankedIds.length + needed - 1);
+
+        if (term) fallbackQuery = fallbackQuery.ilike('title', `%${term}%`);
+
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+        if (fallbackError) {
+          console.error('Catalog boundary fallback query failed', fallbackError.code);
+          return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
+        }
+
+        const fullBooks = (fullBooksData ?? []) as Book[];
+        const fallbackBooks = (fallbackData ?? []) as Book[];
+        const allAuthorIds = Array.from(
+          new Set([...fullBooks, ...fallbackBooks].map((b) => b.author_id).filter(Boolean)),
+        );
+        const { data: authors } = allAuthorIds.length
+          ? await client.from('authors').select('id,name').in('id', allAuthorIds)
+          : { data: [] };
+
+        const authorMap = new Map((authors ?? []).map((a) => [a.id, a.name]));
+        const fullBooksMap = new Map(fullBooks.map((b) => [b.id, b]));
+
+        const rankedPart: Book[] = candidateSliceIds.flatMap((id) => {
+          const fullBook = fullBooksMap.get(id);
+          if (!fullBook) return [];
+          const itemMeta = metaMap?.get(id);
+          return [
+            {
+              ...fullBook,
+              authors: { name: authorMap.get(fullBook.author_id) ?? 'Autor(a)' },
+              readingStatus: userReadingsMap?.get(id) ?? itemMeta?.readingStatus,
+              isRecommended: itemMeta?.isRecommended,
+              recommendationScore: itemMeta?.recommendationScore,
+              recommendationReason: itemMeta?.recommendationReason,
+            },
+          ];
+        });
+
+        const fallbackPart: Book[] = fallbackBooks.map((b) => ({
+          ...b,
+          authors: { name: authorMap.get(b.author_id) ?? 'Autor(a)' },
+          readingStatus: userReadingsMap?.get(b.id) ?? null,
+        }));
+
+        paginatedBooks = [...rankedPart, ...fallbackPart];
+      } else {
+        const pageSliceIds = rankedIds.slice(offset, offset + limit);
+
+        if (!pageSliceIds.length) {
+          return querySuccess({
+            books: [],
+            total,
+            page,
+            totalPages,
+            isPersonalized: true,
+          });
+        }
+
+        const { data: fullBooksData, error: fullError } = await client
+          .from('books')
+          .select(FULL_BOOK_COLUMNS)
+          .in('id', pageSliceIds);
+
+        if (fullError) {
+          console.error('Catalog full books query failed', fullError.code);
+          return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
+        }
+
+        const fullBooks = (fullBooksData ?? []) as Book[];
+        const authorIds = Array.from(new Set(fullBooks.map((b) => b.author_id).filter(Boolean)));
+        const { data: authors } = authorIds.length
+          ? await client.from('authors').select('id,name').in('id', authorIds)
+          : { data: [] };
+
+        const authorMap = new Map((authors ?? []).map((a) => [a.id, a.name]));
+        const fullBooksMap = new Map(fullBooks.map((b) => [b.id, b]));
+
+        paginatedBooks = pageSliceIds.flatMap((id) => {
+          const fullBook = fullBooksMap.get(id);
+          if (!fullBook) return [];
+          const itemMeta = metaMap?.get(id);
+          return [
+            {
+              ...fullBook,
+              authors: { name: authorMap.get(fullBook.author_id) ?? 'Autor(a)' },
+              readingStatus: userReadingsMap?.get(id) ?? itemMeta?.readingStatus,
+              isRecommended: itemMeta?.isRecommended,
+              recommendationScore: itemMeta?.recommendationScore,
+              recommendationReason: itemMeta?.recommendationReason,
+            },
+          ];
         });
       }
-
-      const { data: fullBooksData, error: fullError } = await client
-        .from('books')
-        .select(FULL_BOOK_COLUMNS)
-        .in('id', pageSliceIds);
-
-      if (fullError) {
-        console.error('Catalog full books query failed', fullError.code);
-        return queryFailure('unavailable', 'Não foi possível carregar os detalhes dos livros.');
-      }
-
-      const fullBooks = (fullBooksData ?? []) as Book[];
-      const authorIds = Array.from(new Set(fullBooks.map((b) => b.author_id).filter(Boolean)));
-      const { data: authors } = authorIds.length
-        ? await client.from('authors').select('id,name').in('id', authorIds)
-        : { data: [] };
-
-      const authorMap = new Map((authors ?? []).map((a) => [a.id, a.name]));
-      const fullBooksMap = new Map(fullBooks.map((b) => [b.id, b]));
-
-      const paginatedBooks: Book[] = pageSliceIds.flatMap((id) => {
-        const fullBook = fullBooksMap.get(id);
-        if (!fullBook) return [];
-        const itemMeta = metaMap?.get(id);
-        return [
-          {
-            ...fullBook,
-            authors: { name: authorMap.get(fullBook.author_id) ?? 'Autor(a)' },
-            readingStatus: userReadingsMap?.get(id) ?? itemMeta?.readingStatus,
-            isRecommended: itemMeta?.isRecommended,
-            recommendationScore: itemMeta?.recommendationScore,
-            recommendationReason: itemMeta?.recommendationReason,
-          },
-        ];
-      });
 
       return querySuccess({
         books: paginatedBooks,

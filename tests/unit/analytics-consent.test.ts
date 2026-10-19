@@ -90,4 +90,53 @@ describe('Analytics Consent Management', () => {
 
     window.removeEventListener(analyticsConsentEventName(), handler);
   });
+
+  it('permite revogar consentimento e despacha denied (QA-17)', async () => {
+    const { revokeAnalyticsConsent } = await import('../../src/lib/analytics/consent');
+
+    saveAnalyticsConsent('granted');
+    expect(readAnalyticsConsent()).toBe('granted');
+
+    const handler = vi.fn();
+    window.addEventListener(analyticsConsentEventName(), handler);
+
+    revokeAnalyticsConsent();
+
+    expect(readAnalyticsConsent()).toBeNull();
+    expect(handler).toHaveBeenCalledTimes(1);
+    const event = handler.mock.calls[0]?.[0] as CustomEvent;
+    expect(event.detail).toBe('denied');
+
+    window.removeEventListener(analyticsConsentEventName(), handler);
+  });
+
+  it('alterna fluidamente entre permitir e recusar/revogar analytics', () => {
+    // Permitir analytics
+    saveAnalyticsConsent('granted');
+    expect(readAnalyticsConsent()).toBe('granted');
+
+    // Recusar analytics
+    saveAnalyticsConsent('denied');
+    expect(readAnalyticsConsent()).toBe('denied');
+
+    // Permitir novamente
+    saveAnalyticsConsent('granted');
+    expect(readAnalyticsConsent()).toBe('granted');
+  });
+
+  it('renderiza o componente AnalyticsPreferences com botões de alternância e semântica LGPD (QA-17)', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { AnalyticsPreferences } = await import(
+      '../../src/components/analytics/analytics-preferences'
+    );
+
+    const html = renderToStaticMarkup(React.createElement(AnalyticsPreferences));
+
+    expect(html).toContain('privacy-consent-manager');
+    expect(html).toContain('Permitir analytics');
+    expect(html).toContain('Recusar ou revogar');
+    expect(html).toContain('Redefinir preferência');
+    expect(html).toContain('Status atual do seu consentimento:');
+  });
 });

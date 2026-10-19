@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState, useRef, useTransition } from 'react';
 import { createClubMeetingAction, updateClubMeetingAction } from '@/features/meetings/actions';
 import { chapterLabel } from '@/lib/chapter-label';
 
@@ -25,6 +25,34 @@ export interface MeetingFormProps {
     version: number;
   };
   onSuccessRedirectHref?: string;
+}
+
+export function computeMeetingFingerprint(payload: {
+  clubId: string;
+  bookId: string;
+  chapterId: string | null;
+  title: string;
+  kind: string;
+  scheduledAt: string;
+  durationMin: number;
+  meetingUrl: string | null;
+  location: string | null;
+  agenda: string | null;
+  spoilerPolicy: string;
+}): string {
+  return JSON.stringify({
+    clubId: payload.clubId,
+    bookId: payload.bookId,
+    chapterId: payload.chapterId,
+    title: payload.title.trim(),
+    kind: payload.kind,
+    scheduledAt: payload.scheduledAt,
+    durationMin: payload.durationMin,
+    meetingUrl: payload.meetingUrl ? payload.meetingUrl.trim() : null,
+    location: payload.location ? payload.location.trim() : null,
+    agenda: payload.agenda ? payload.agenda.trim() : null,
+    spoilerPolicy: payload.spoilerPolicy,
+  });
 }
 
 function toLocalDatetimeString(isoString?: string): string {
@@ -51,6 +79,7 @@ export function MeetingForm({
 }: MeetingFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const requestKeyRef = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const [title, setTitle] = useState(initialData?.title ?? '');
   const [kind, setKind] = useState<'online' | 'in_person' | 'hybrid'>(initialData?.kind ?? 'online');
@@ -105,21 +134,33 @@ export function MeetingForm({
 
     const isoScheduledAt = scheduledDate.toISOString();
 
+    const meetingPayload = {
+      clubId,
+      bookId,
+      chapterId: chapterId ? chapterId : null,
+      title: title.trim(),
+      kind,
+      scheduledAt: isoScheduledAt,
+      durationMin,
+      meetingUrl: meetingUrl.trim() || null,
+      location: location.trim() || null,
+      agenda: agenda.trim() || null,
+      spoilerPolicy,
+    };
+
+    const fingerprint = computeMeetingFingerprint(meetingPayload);
+    const requestId =
+      requestKeyRef.current?.fingerprint === fingerprint
+        ? requestKeyRef.current.id
+        : crypto.randomUUID();
+
+    requestKeyRef.current = { fingerprint, id: requestId };
+
     startTransition(async () => {
       if (mode === 'create') {
         const res = await createClubMeetingAction({
-          clubId,
-          bookId,
-          chapterId: chapterId ? chapterId : null,
-          title: title.trim(),
-          kind,
-          scheduledAt: isoScheduledAt,
-          durationMin,
-          meetingUrl: meetingUrl.trim() || null,
-          location: location.trim() || null,
-          agenda: agenda.trim() || null,
-          spoilerPolicy,
-          requestId: crypto.randomUUID(),
+          ...meetingPayload,
+          requestId,
         });
 
         if (!res.ok) {

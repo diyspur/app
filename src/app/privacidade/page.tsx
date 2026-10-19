@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { supportEmail } from '@/lib/site-contact';
-import { PrivacyConsentManager } from '@/components/analytics/privacy-consent-manager';
+import { AnalyticsPreferences } from '@/components/analytics/analytics-preferences';
 
 export const metadata: Metadata = {
   title: 'Privacidade e Proteção de Dados',
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
         utilizando o painel interativo abaixo:
       </p>
 
-      <PrivacyConsentManager />
+      <AnalyticsPreferences />
 
       <h2>4. Ferramentas de Telemetria e Finalidades</h2>
       <ul>

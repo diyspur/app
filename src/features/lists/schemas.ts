@@ -33,9 +33,22 @@ export const reorderListSchema = z.object({
   itemIds: z.array(z.string().uuid()).max(500),
 }).strict();
 
+export const canonicalUsername = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/^@/, '').toLowerCase())
+  .pipe(
+    z
+      .string()
+      .regex(
+        /^[a-z0-9_]{3,24}$/,
+        'Nome de usuário deve ter entre 3 e 24 caracteres (letras minúsculas, números e sublinhados).'
+      )
+  );
+
 export const inviteCollaboratorSchema = z.object({
   listId: z.string().uuid(),
-  username: z.string().trim().min(2, 'Informe o nome de usuário.').max(30),
+  username: canonicalUsername,
 }).strict();
 
 export const removeCollaboratorSchema = z.object({

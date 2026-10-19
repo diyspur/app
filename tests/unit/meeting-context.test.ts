@@ -97,6 +97,113 @@ describe('Meeting & Events Validation & Security (SDD 9 & 12.6)', () => {
     });
   });
 
+  describe('Stable Meeting Idempotency Fingerprint (QA-22)', () => {
+    it('produces identical fingerprint for identical payloads', async () => {
+      const { computeMeetingFingerprint } = await import(
+        '@/components/calendar/meeting-form'
+      );
+
+      const payload1 = {
+        clubId: validUUID,
+        bookId: validUUID,
+        chapterId: null,
+        title: 'Discussão Capítulos 1 a 3',
+        kind: 'online',
+        scheduledAt: '2026-10-25T20:00:00.000Z',
+        durationMin: 60,
+        meetingUrl: 'https://meet.google.com/abc-defg-hij',
+        location: null,
+        agenda: 'Pauta inicial',
+        spoilerPolicy: 'chapter',
+      };
+
+      const payload2 = {
+        ...payload1,
+        title: '  Discussão Capítulos 1 a 3  ',
+        meetingUrl: 'https://meet.google.com/abc-defg-hij  ',
+        agenda: '  Pauta inicial  ',
+      };
+
+      const fp1 = computeMeetingFingerprint(payload1);
+      const fp2 = computeMeetingFingerprint(payload2);
+
+      expect(fp1).toBe(fp2);
+    });
+
+    it('produces distinct fingerprint when any logical field is modified', async () => {
+      const { computeMeetingFingerprint } = await import(
+        '@/components/calendar/meeting-form'
+      );
+
+      const base = {
+        clubId: validUUID,
+        bookId: validUUID,
+        chapterId: null,
+        title: 'Discussão Inicial',
+        kind: 'online',
+        scheduledAt: '2026-10-25T20:00:00.000Z',
+        durationMin: 60,
+        meetingUrl: 'https://meet.google.com/abc',
+        location: null,
+        agenda: null,
+        spoilerPolicy: 'none',
+      };
+
+      const baseFp = computeMeetingFingerprint(base);
+
+      // Modified title
+      expect(computeMeetingFingerprint({ ...base, title: 'Outro Título' })).not.toBe(baseFp);
+      // Modified date
+      expect(computeMeetingFingerprint({ ...base, scheduledAt: '2026-10-26T20:00:00.000Z' })).not.toBe(baseFp);
+      // Modified duration
+      expect(computeMeetingFingerprint({ ...base, durationMin: 90 })).not.toBe(baseFp);
+      // Modified kind
+      expect(computeMeetingFingerprint({ ...base, kind: 'in_person' })).not.toBe(baseFp);
+      // Modified spoiler policy
+      expect(computeMeetingFingerprint({ ...base, spoilerPolicy: 'chapter' })).not.toBe(baseFp);
+    });
+
+    it('simulates retry logic: reuses requestId on unchanged payload, generates new on modified payload', async () => {
+      const { computeMeetingFingerprint } = await import(
+        '@/components/calendar/meeting-form'
+      );
+
+      let keyRef: { fingerprint: string; id: string } | null = null;
+
+      function getOrCreateRequestId(payload: Parameters<typeof computeMeetingFingerprint>[0]) {
+        const fp = computeMeetingFingerprint(payload);
+        const id = keyRef?.fingerprint === fp ? keyRef.id : 'uuid-' + Math.random().toString(36).slice(2);
+        keyRef = { fingerprint: fp, id };
+        return id;
+      }
+
+      const payload = {
+        clubId: validUUID,
+        bookId: validUUID,
+        chapterId: null,
+        title: 'Discussão',
+        kind: 'online',
+        scheduledAt: '2026-10-25T20:00:00.000Z',
+        durationMin: 60,
+        meetingUrl: 'https://meet.google.com/abc',
+        location: null,
+        agenda: null,
+        spoilerPolicy: 'none',
+      };
+
+      // First submit attempt
+      const firstId = getOrCreateRequestId(payload);
+
+      // Retry after network failure (identical payload)
+      const retryId = getOrCreateRequestId(payload);
+      expect(retryId).toBe(firstId);
+
+      // User changes title and submits
+      const changedId = getOrCreateRequestId({ ...payload, title: 'Discussão Modificada' });
+      expect(changedId).not.toBe(firstId);
+    });
+  });
+
   describe('Semantic Layouts and CSS Integrity (QA-01, QA-23)', () => {
     it('defines all required semantic classes in global.css', async () => {
       const fs = await import('node:fs');

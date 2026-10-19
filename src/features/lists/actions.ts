@@ -187,16 +187,15 @@ export async function inviteListCollaborator(input: unknown): Promise<ListAction
     return { ok: false, message: 'Apenas o proprietário pode convidar colaboradores.' };
   }
 
-  // Find user by username
-  const cleanUsername = parsed.data.username.replace(/^@/, '').trim();
+  // Find user by username (exact match, canonicalized by schema)
   const { data: targetProfile, error: profileError } = await session.client
     .from('profiles')
     .select('id, username, display_name')
-    .ilike('username', cleanUsername)
+    .eq('username', parsed.data.username)
     .maybeSingle();
 
   if (profileError || !targetProfile) {
-    return { ok: false, message: `Usuário "${cleanUsername}" não encontrado.` };
+    return { ok: false, message: `Usuário "${parsed.data.username}" não encontrado.` };
   }
 
   if (targetProfile.id === session.userId) {

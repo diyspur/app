@@ -47,18 +47,61 @@ describe('reading list schemas (QA-13)', () => {
     expect(valid.success).toBe(true);
   });
 
-  it('validates collaborator invitation username', () => {
-    const valid = inviteCollaboratorSchema.safeParse({
+  it('validates collaborator invitation username and normalizes @usuario to lowercase', () => {
+    const validWithAt = inviteCollaboratorSchema.safeParse({
       listId: '123e4567-e89b-12d3-a456-426614174000',
-      username: 'maria_leitora',
+      username: '@Maria_Leitora',
     });
-    expect(valid.success).toBe(true);
+    expect(validWithAt.success).toBe(true);
+    if (validWithAt.success) {
+      expect(validWithAt.data.username).toBe('maria_leitora');
+    }
 
-    const invalid = inviteCollaboratorSchema.safeParse({
+    const validWithoutAt = inviteCollaboratorSchema.safeParse({
       listId: '123e4567-e89b-12d3-a456-426614174000',
-      username: 'a',
+      username: 'MARIA_LEITORA',
     });
-    expect(invalid.success).toBe(false);
+    expect(validWithoutAt.success).toBe(true);
+    if (validWithoutAt.success) {
+      expect(validWithoutAt.data.username).toBe('maria_leitora');
+    }
+  });
+
+  it('rejects collaborator usernames with %, spaces, or special characters (QA-18)', () => {
+    const invalidInputs = [
+      '%usuario%',
+      'maria%',
+      '%leitor',
+      '@user%name',
+      'admin%',
+      'maria leitora',
+      '@maria leitora',
+      'user name',
+      'user!name',
+      'user-name',
+      'user.name',
+      'user$name',
+      '@user#name',
+    ];
+
+    for (const username of invalidInputs) {
+      const parsed = inviteCollaboratorSchema.safeParse({
+        listId: '123e4567-e89b-12d3-a456-426614174000',
+        username,
+      });
+      expect(parsed.success).toBe(false);
+    }
+  });
+
+  it('rejects collaborator usernames shorter than 3 or longer than 24 characters', () => {
+    const invalidLengths = ['a', 'ab', '@ab', 'a'.repeat(25), '@' + 'a'.repeat(25)];
+    for (const username of invalidLengths) {
+      const parsed = inviteCollaboratorSchema.safeParse({
+        listId: '123e4567-e89b-12d3-a456-426614174000',
+        username,
+      });
+      expect(parsed.success).toBe(false);
+    }
   });
 
   it('validates collaborator removal by UUID', () => {

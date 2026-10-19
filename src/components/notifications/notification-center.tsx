@@ -140,6 +140,7 @@ export function NotificationCenter({ open, onClose }: NotificationCenterProps) {
             type="button"
             role="tab"
             aria-selected={!unreadOnly}
+            aria-pressed={!unreadOnly}
             className={`notification-filter-tab ${!unreadOnly ? 'active' : ''}`}
             onClick={() => setUnreadOnly(false)}
           >
@@ -149,6 +150,7 @@ export function NotificationCenter({ open, onClose }: NotificationCenterProps) {
             type="button"
             role="tab"
             aria-selected={unreadOnly}
+            aria-pressed={unreadOnly}
             className={`notification-filter-tab ${unreadOnly ? 'active' : ''}`}
             onClick={() => setUnreadOnly(true)}
           >

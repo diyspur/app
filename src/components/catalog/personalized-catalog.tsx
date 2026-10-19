@@ -182,7 +182,7 @@ export function PersonalizedCatalog({
             ? 'Carregando mais livros…'
             : hasMore
               ? `Exibindo ${books.length} de ${totalBooks} livros`
-              : `Você chegou ao fim do catálogo · ${books.length} livros exibidos`}
+              : `Você chegou ao fim do catálogo · ${books.length === 1 ? '1 livro exibido' : `${books.length} livros exibidos`}`}
         </p>
 
         {loadError ? (

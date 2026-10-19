@@ -5,10 +5,13 @@
 
 export function cleanChapterTitle(title: string, chapterNumber?: number): string {
   if (!title) return '';
-  const trimmed = title.trim();
-  const cleaned = trimmed.replace(/^(?:cap[íi]tulo|cap\.?)\s*\d+\s*(?:[—–\-:·]\s*|\s+)/i, '').trim();
+  let cleaned = title.trim();
+  const prefixRegex = /^(?:cap[íi]tulo|cap\.?)\s*\d+\s*(?:[—–\-:·]\s*|\s+)/i;
+  while (prefixRegex.test(cleaned)) {
+    cleaned = cleaned.replace(prefixRegex, '').trim();
+  }
   if (!cleaned) {
-    return chapterNumber !== undefined ? `Capítulo ${chapterNumber}` : trimmed;
+    return chapterNumber !== undefined ? `Capítulo ${chapterNumber}` : title.trim();
   }
   return cleaned;
 }

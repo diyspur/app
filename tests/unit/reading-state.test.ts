@@ -4,6 +4,7 @@ import {
   setBookReadingSchema,
   type BookReadingStatus,
 } from '@/features/reading/schemas';
+import { getShelfStatusPresentation } from '@/features/reading/presentation';
 
 describe('Canonical Reading State Transitions & Schemas (SDD 12.5)', () => {
   const validUUID = '123e4567-e89b-12d3-a456-426614174000';
@@ -75,6 +76,25 @@ describe('Canonical Reading State Transitions & Schemas (SDD 12.5)', () => {
       for (const s of statuses) {
         expect(isValidReadingStatusTransition(s, s)).toBe(true);
       }
+    });
+  });
+
+  describe('Shelf Status Presentation & Unification (QA-08)', () => {
+    it('presents dnf status as "Abandonei/Não concluído"', () => {
+      const presentation = getShelfStatusPresentation('dnf');
+      expect(presentation.label).toBe('Abandonei/Não concluído');
+      expect(presentation.badgeClass).toContain('status-pill');
+    });
+
+    it('presents all canonical reading statuses with appropriate labels', () => {
+      expect(getShelfStatusPresentation('want_to_read').label).toBe('Quero ler');
+      expect(getShelfStatusPresentation('reading').label).toBe('Em andamento');
+      expect(getShelfStatusPresentation('read').label).toBe('Concluído');
+    });
+
+    it('falls back gracefully for unknown or null status', () => {
+      expect(getShelfStatusPresentation(null).label).toBe('Sem status');
+      expect(getShelfStatusPresentation('unknown_status').label).toBe('unknown_status');
     });
   });
 });

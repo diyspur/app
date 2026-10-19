@@ -20,7 +20,7 @@ function statusLabel(status: ReadingHistoryItem['status'] | string): string {
     want_to_read: 'Quero ler',
     reading: 'Em andamento',
     read: 'Concluído',
-    dnf: 'Abandono / Pausado',
+    dnf: 'Abandonei/Não concluído',
   };
   return labels[status] ?? status;
 }
@@ -28,6 +28,10 @@ function statusLabel(status: ReadingHistoryItem['status'] | string): string {
 function HistoryRow({ item }: { item: ReadingHistoryItem }) {
   const updatedDate = formatDate(item.updatedAt);
   const hasProgress = typeof item.percent === 'number';
+  const seasonDisplay =
+    item.season.title.trim().toLowerCase() === item.book.title.trim().toLowerCase()
+      ? `Temporada ${item.season.number}`
+      : item.season.title;
 
   return (
     <article className="timeline-row">
@@ -43,7 +47,7 @@ function HistoryRow({ item }: { item: ReadingHistoryItem }) {
           </Link>
           {' · '}
           <Link className="text-link" href={`/temporadas/${item.season.slug}`}>
-            {item.season.title}
+            {seasonDisplay}
           </Link>
           {' · capítulo '}
           {item.chapter.number}

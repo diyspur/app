@@ -25,7 +25,15 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpenDropdown(null);
+        setOpenDropdown((current) => {
+          if (current) {
+            const trigger = navRef.current?.querySelector<HTMLButtonElement>(
+              `button[aria-controls="nav-${current}-menu"]`
+            );
+            trigger?.focus();
+          }
+          return null;
+        });
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -35,6 +43,12 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  function handleDropdownBlur(event: React.FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setOpenDropdown(null);
+    }
+  }
 
   const isExploreActive =
     pathname.startsWith('/livros') ||
@@ -59,22 +73,24 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
       </Link>
 
       {/* Menu Dropdown: Comunidade */}
-      <div className="nav-dropdown">
+      <div className="nav-dropdown" onBlur={handleDropdownBlur}>
         <button
           type="button"
           className={`nav-dropdown-trigger ${isCommunityActive ? 'active' : ''}`}
           onClick={() => setOpenDropdown((prev) => (prev === 'community' ? null : 'community'))}
           aria-expanded={openDropdown === 'community'}
-          aria-haspopup="true"
+          aria-controls="nav-community-menu"
         >
           <span>Comunidade</span>
           <span className="nav-dropdown-chevron" aria-hidden="true">▼</span>
         </button>
-        <div className={`nav-dropdown-menu ${openDropdown === 'community' ? 'open' : ''}`} role="menu">
+        <div
+          id="nav-community-menu"
+          className={`nav-dropdown-menu ${openDropdown === 'community' ? 'open' : ''}`}
+        >
           <Link
             className="nav-dropdown-item"
             href="/comunidade"
-            role="menuitem"
             onClick={() => setOpenDropdown(null)}
           >
             <span className="nav-dropdown-item-label">Clubes e Conversas</span>
@@ -83,7 +99,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
           <Link
             className="nav-dropdown-item"
             href="/calendario"
-            role="menuitem"
             onClick={() => setOpenDropdown(null)}
           >
             <span className="nav-dropdown-item-label">Encontros</span>
@@ -92,7 +107,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
           <Link
             className="nav-dropdown-item"
             href="/votacao"
-            role="menuitem"
             onClick={() => setOpenDropdown(null)}
           >
             <span className="nav-dropdown-item-label">Votação</span>
@@ -103,22 +117,24 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
 
       {/* Menu Pessoal quando autenticado ou Link Direto quando visitante */}
       {signedIn ? (
-        <div className="nav-dropdown">
+        <div className="nav-dropdown" onBlur={handleDropdownBlur}>
           <button
             type="button"
             className={`nav-dropdown-trigger ${isPersonalActive ? 'active' : ''}`}
             onClick={() => setOpenDropdown((prev) => (prev === 'personal' ? null : 'personal'))}
             aria-expanded={openDropdown === 'personal'}
-            aria-haspopup="true"
+            aria-controls="nav-personal-menu"
           >
             <span>Meu ritmo</span>
             <span className="nav-dropdown-chevron" aria-hidden="true">▼</span>
           </button>
-          <div className={`nav-dropdown-menu ${openDropdown === 'personal' ? 'open' : ''}`} role="menu">
+          <div
+            id="nav-personal-menu"
+            className={`nav-dropdown-menu ${openDropdown === 'personal' ? 'open' : ''}`}
+          >
             <Link
               className="nav-dropdown-item"
               href="/historico"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Histórico de leitura</span>
@@ -127,7 +143,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
             <Link
               className="nav-dropdown-item"
               href="/diario"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Diário</span>
@@ -136,7 +151,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
             <Link
               className="nav-dropdown-item"
               href="/metas"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Metas anuais</span>
@@ -145,7 +159,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
             <Link
               className="nav-dropdown-item"
               href="/minha-fila"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Minha fila</span>
@@ -154,7 +167,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
             <Link
               className="nav-dropdown-item"
               href="/listas"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Minhas listas</span>
@@ -163,7 +175,6 @@ export function DesktopNav({ signedIn = false }: { signedIn?: boolean }) {
             <Link
               className="nav-dropdown-item"
               href="/ranking"
-              role="menuitem"
               onClick={() => setOpenDropdown(null)}
             >
               <span className="nav-dropdown-item-label">Ranking</span>

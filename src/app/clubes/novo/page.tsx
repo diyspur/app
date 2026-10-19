@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { DiscussionEntryButton } from '@/components/discussions/discussion-entry-button';
 import { createServerSupabase } from '@/lib/supabase/clients';
 import { groupEntryContextSchema } from '@/lib/group-entry-context';
+import { chapterLabel } from '@/lib/chapter-label';
 
 export const metadata: Metadata = {
   title: 'Criar ou Entrar no Clube de Leitura | DIYSPUR',
@@ -63,7 +64,7 @@ export default async function NewClubPage({
       .maybeSingle();
 
     if (chapter) {
-      chapterTitle = `Capítulo ${chapter.number}: ${chapter.title}`;
+      chapterTitle = chapterLabel(chapter.title, chapter.number);
     }
   }
 

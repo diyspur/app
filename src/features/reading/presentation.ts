@@ -23,9 +23,9 @@ export const SHELF_STATUS_MAP: Record<ShelfStatus, ShelfStatusPresentation> = {
     description: 'Livro finalizado',
   },
   dnf: {
-    label: 'Pausado',
+    label: 'Abandonei/Não concluído',
     badgeClass: 'status-pill status-pill-muted',
-    description: 'Leitura pausada ou abandonada',
+    description: 'Leitura não concluída ou abandonada',
   },
 };
 

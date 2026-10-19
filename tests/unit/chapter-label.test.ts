@@ -26,4 +26,11 @@ describe('Chapter Label & Title Cleaning (QA-10)', () => {
     expect(chapterLabel('Capítulo 1', 1)).toBe('Capítulo 1');
     expect(chapterLabel('Capítulo 2: A Volta', 2)).toBe('Capítulo 2 · A Volta');
   });
+
+  it('deduplicates titles already containing redundant chapter prefixes (QA-06)', () => {
+    expect(cleanChapterTitle('Capítulo 1: Capítulo 1 — O Início', 1)).toBe('O Início');
+    expect(chapterLabel('Capítulo 1: Capítulo 1 — O Início', 1)).toBe('Capítulo 1 · O Início');
+    expect(chapterLabel('Capítulo 1 — O Início', 1)).toBe('Capítulo 1 · O Início');
+    expect(chapterLabel('Capítulo 1: O Início', 1)).toBe('Capítulo 1 · O Início');
+  });
 });

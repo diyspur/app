@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { createClubMeetingAction, updateClubMeetingAction } from '@/features/meetings/actions';
+import { chapterLabel } from '@/lib/chapter-label';
 
 export interface MeetingFormProps {
   mode: 'create' | 'edit';
@@ -267,7 +268,7 @@ export function MeetingForm({
             <option value="">Nenhum capítulo específico</option>
             {chapters.map((ch) => (
               <option key={ch.id} value={ch.id}>
-                Capítulo {ch.number}: {ch.title}
+                {chapterLabel(ch.title, ch.number)}
               </option>
             ))}
           </select>
